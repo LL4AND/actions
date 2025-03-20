@@ -162,7 +162,7 @@ Made with [contrib.rocks](https://contrib.rocks).
 
 ## Acknowledgements
 
-This work leverages the power of the open source community. 
+This work leverages the power of the open-source community. 
 
 For data synthesis, we utilized [GraphRAG](https://github.com/microsoft/graphrag) from Microsoft.
 
