@@ -1,36 +1,247 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# **Second Me - Front-end**
 
-## Getting Started
+The `lpm_frontend` directory contains the front-end portion of the **Second Me** project. It provides the user interface for interacting with the system, allowing users to manage and train their AI, view memory, and more. This module is built with a modern front-end tech stack to ensure a seamless and efficient user experience.
 
-First, run the development server:
+------
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## **Overview**
+
+1. **User Interface**
+    Provides an intuitive interface for managing Second Me, Upload Memory, and training model.
+2. **Real-Time Interaction**
+    Seamlessly connects with the back-end for real-time data updates and interactions.
+3. **Theme Support**
+    Includes customizable themes and network user color identification.
+
+------
+
+## **Tech Stack**
+
+- **Next.js (v14)**: Server-Side Rendering (SSR) and Static Site Generation (SSG).
+- **React (v18)**: Component-based UI development.
+- **TypeScript**: Strong typing for scalable development.
+- **Tailwind CSS**: Utility-first styling with responsive design.
+- **Ant Design**: Enterprise-grade UI components.
+- **Zustand**: Lightweight state management.
+- **Framer Motion** & **Three.js**: Smooth animations and 3D rendering.
+- **ESLint** & **Prettier**: Enforced code quality and consistent formatting.
+
+------
+
+## **System Requirements**
+
+- **Node.js**: Version 18.x or higher
+- **npm or yarn**: Latest version recommended
+- **Browser**: Chrome, Edge, or any modern browser
+
+------
+
+## **Installation and Setup**
+
+### **1. Clone the Repository**
+
+```
+git clone https://github.com/mindverse/Second-Me.git
+cd Second-Me/lpm_frontend
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### **2. Install Dependencies**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Using npm:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+npm install
+```
 
-## Learn More
+Or using yarn:
 
-To learn more about Next.js, take a look at the following resources:
+```
+yarn install
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### **3. Run the Development Server**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Using npm:
 
-## Deploy on Vercel
+```
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Or using yarn:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+yarn dev
+```
+
+Once the server is running, open your browser and navigate to:
+ [http://localhost:3000](http://localhost:3000/)
+
+------
+
+## **Building for Production**
+
+To build the project for production, run the following command:
+
+```
+npm run build
+```
+
+Or using yarn:
+
+```
+yarn build
+```
+
+------
+
+## **Project Structure**
+
+```
+src/
+  ├── app/                # Pages and routing-related modules
+  │   ├── dashboard/
+  │   ├── home/
+  │   ├── standalone/
+  │   ├── globals.css
+  │   └── layout.tsx
+  │
+  ├── components/         # Reusable UI components
+  │   ├── AvatarUpload
+  │   ├── Celebration
+  │   ├── chat
+  │   ├── InfoModal
+  │   ├── LoadMore
+  │   ├── modelConfigModal
+  │   ├── ModelStatus
+  │   ├── multi-upload-task
+  │   ├── NetworkSphere
+  │   ├── OnboardingTutorial
+  │   ├── playground
+  │   ├── roleplay
+  │   ├── rooms
+  │   ├── SimpleMD
+  │   ├── spaces
+  │   ├── StatusBar
+  │   ├── svgs
+  │   ├── train
+  │   └── upload
+  │
+  ├── contexts/           # Global contexts
+  │   └── AntdRegistry.tsx
+  │
+  ├── hooks/              # Custom Hooks
+  │   └── useSSE.tsx
+  │
+  ├── layouts/            # Layout components for page structure
+  │   ├── DashboardLayout
+  │   └── HeaderLayout
+  │
+  ├── service/            # API service logic for backend interactions
+  │   ├── info.ts
+  │   ├── memory.ts
+  │   ├── model.ts
+  │   ├── modelConfig.ts
+  │   ├── role.ts
+  │   ├── space.ts
+  │   ├── train.ts
+  │   └── upload.ts
+  │
+  ├── store/              # State management tools
+  │   ├── useLoadInfoStore.ts
+  │   ├── useModelConfigStore.ts
+  │   ├── useSpaceStore.ts
+  │   ├── useTrainingStore.ts
+  │   └── useUploadStore.ts
+  │
+  ├── types/              # TypeScript type definitions
+  │   ├── chat.ts
+  │   └── responseModal.ts
+  │
+  └── utils/              # Utility functions and helpers
+      ├── chatStorage.ts
+      ├── event.ts
+      ├── localRegisteredUpload.ts
+      ├── localStorage.ts
+      ├── memory.ts
+      ├── request.ts
+      └── router.ts
+
+```
+
+
+
+```
+lpm_frontend/
+├── public/               # Static assets (images, fonts)
+├── rules/eslint/         # ESLint rules configuration
+├── src/                  # Source code (components, pages, logic)
+├── .eslintignore         # Files and directories ignored by ESLint
+├── .eslintrc.js          # ESLint main configuration file
+├── .gitignore            # Git ignore rules
+├── .prettierignore       # Files and directories ignored by Prettier
+├── .prettierrc.js        # Prettier configuration file for code formatting
+├── .stylelintignore      # Files and directories ignored by Stylelint
+├── .stylelintrc.js       # Stylelint configuration file for CSS/SCSS linting
+├── next.config.js        # Next.js configuration file
+├── package.json          # Project dependencies and scripts
+├── postcss.config.mjs    # PostCSS configuration file
+├── tailwind.config.ts    # Tailwind CSS configuration
+├── tsconfig.json         # TypeScript configuration file
+├── yarn.lock             # Dependency lock file (for Yarn)
+└── package-lock.json     # Dependency lock file (for npm)
+```
+
+------
+
+## **Scripts**
+
+Here are the most commonly used npm/yarn scripts:
+
+- Start the development server:
+
+  ```
+  npm run dev
+  ```
+
+- Build for production:
+
+  ```
+  npm run build
+  ```
+
+- Run code linting:
+
+  ```
+  npm run lint
+  ```
+
+------
+
+## **Contributing**
+
+We welcome contributions to the `lpm_frontend` project! Here’s how you can contribute:
+
+1. **Fork the repository**.
+
+2. Create a new branch:
+
+   ```
+   git checkout -b feature/your-feature-name
+   ```
+
+3. Commit your changes and push:
+
+   ```
+   git commit -m "Add your message"
+   git push origin feature/your-feature-name
+   ```
+
+4. Submit a Pull Request.
+
+------
+
+
+
+## **License**
+
+This project is licensed under the **Apache 2.0 License**.
