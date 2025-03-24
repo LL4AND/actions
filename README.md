@@ -129,6 +129,10 @@ make help
 ## Tutorial
 - Feel free to follow [User tutorial](https://second-me.gitbook.io/a-new-ai-species-making-we-matter-again) to build your Second Me.
 
+## Join the Community
+- [Discord](https://discord.com/invite/GpWHQNUwrg)
+- [Reddit](https://www.reddit.com/r/SecondMeAI/)
+- [X](https://x.com/SecondMe_AI1)
 
 ## Coming Soon 🚀
 
