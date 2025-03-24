@@ -20,6 +20,9 @@
       "stylelint --fix"
     ]
   },
+  "overrides": {
+    "braces": "3.0.3"
+  },
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",

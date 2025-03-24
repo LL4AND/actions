@@ -451,7 +451,6 @@ export default function RegisterUploadModal({ open, onClose }: RegisterUploadMod
             className="space-y-3 max-h-[380px] overflow-y-auto pr-2"
             id="netWorkMemberScrollList"
           >
-            {/* {renderNetWorkMemberList()} */}
             <NetWorkMemberList />
           </div>
         </div>

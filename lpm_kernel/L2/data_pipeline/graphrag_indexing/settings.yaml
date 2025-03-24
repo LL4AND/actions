@@ -38,6 +38,7 @@ models:
     retry_strategy: native
     tokens_per_minute: 0
     type: openai_chat
+    encoding_model: cl100k_base
   default_embedding_model:
     api_base: https://api.openai.com/v1
     api_key: sk-xxxxxx

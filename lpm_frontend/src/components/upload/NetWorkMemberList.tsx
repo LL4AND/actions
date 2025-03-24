@@ -12,6 +12,21 @@ import { useLoadInfoStore } from '@/store/useLoadInfoStore';
 import classNames from 'classnames';
 import LoadMore from '../LoadMore';
 
+const colorClasses = [
+  'bg-red-500',
+  'bg-pink-500',
+  'bg-purple-500',
+  'bg-indigo-500',
+  'bg-blue-500',
+  'bg-cyan-500',
+  'bg-teal-500',
+  'bg-green-500',
+  'bg-lime-500',
+  'bg-yellow-500',
+  'bg-amber-500',
+  'bg-orange-500'
+];
+
 const NetWorkMemberList = () => {
   const loading = useUploadStore((state) => state.loading);
   const total = useUploadStore((state) => state.total);
@@ -22,6 +37,20 @@ const NetWorkMemberList = () => {
   useEffect(() => {
     fetchUploadList();
   }, []);
+
+  const getRandomColor = (str: string) => {
+    if (!str) return 'bg-gray-400';
+
+    let hash = 0;
+
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    const index = Math.abs(hash) % colorClasses.length;
+
+    return colorClasses[index];
+  };
 
   const renderUploadList = useCallback(() => {
     return uploads?.map((upload) => {
@@ -45,7 +74,7 @@ const NetWorkMemberList = () => {
         >
           <div className="flex items-center gap-3 w-full">
             <div
-              className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white bg-gray-400`}
+              className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white ${getRandomColor(upload?.upload_name)}`}
             >
               {upload?.upload_name ? upload?.upload_name.charAt(0).toUpperCase() : '?'}
             </div>

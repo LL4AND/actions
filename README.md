@@ -126,7 +126,8 @@ Using make:
 ```bash
 make help
 ```
-
+## Tutorial
+- Feel free to follow [User tutorial](https://second-me.gitbook.io/a-new-ai-species-making-we-matter-again) to build your Second Me.
 
 
 ## Coming Soon 🚀
@@ -177,3 +178,13 @@ We also want to extend our sincere gratitude to all users who have experienced S
 Second Me is open source software licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for more details.
 
 [license]: ./LICENSE
+
+## Star History
+
+<a href="https://www.star-history.com/#mindverse/Second-Me&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=mindverse/Second-Me&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=mindverse/Second-Me&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=mindverse/Second-Me&type=Date" />
+ </picture>
+</a>

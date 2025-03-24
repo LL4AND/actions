@@ -1124,6 +1124,26 @@ class TrainProcessService:
             self.logger.error(f"Convert model failed: {str(e)}")
             return False
 
+    def check_training_condition(self) -> bool:
+        """
+        Check if the conditions for training are met
+        Returns:
+            bool: True if conditions are met, False otherwise
+        """
+        try:
+            # Check if there are any documents that need embedding
+            if document_service.check_all_documents_embeding_status():
+                self.logger.warning("Cannot start training: There are documents that need embedding process first")
+                return False
+            return True
+        except Exception as e:
+            self.logger.error(f"Error checking training conditions: {str(e)}", exc_info=True)
+            if self.progress.progress.current_stage:
+                current_step = self.progress.progress.stages[self.progress.progress.current_stage].current_step
+                if current_step:
+                    step = ProcessStep(current_step)
+                    self.progress.mark_step_failed(step)
+
     def start_process(self) -> bool:
         """Start training process"""
         try:
@@ -1178,6 +1198,20 @@ class TrainProcessService:
             self.progress.mark_step_failed(step)
             return False
 
+    def set_retrian_progress(self):
+        """Save current progress
+        
+        This method saves the current progress to the progress file and triggers the progress callback if available.
+        """
+        try:
+            self.progress.reset_progress()
+            for step_name in self.progress.progress.stages["downloading_the_base_model"].steps:
+                self.progress.progress.update_progress("downloading_the_base_model", step_name, Status.COMPLETED)
+            self.progress._save_progress()
+            self.logger.info("Progress saved successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to save progress: {str(e)}")
+    
     def stop_process(self):
         """Stop training process
         
