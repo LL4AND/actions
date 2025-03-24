@@ -44,22 +44,22 @@ class L2DataProcessor:
     
     Attributes:
         data_path: Base path for data processing.
-        prefered_lang: Preferred language for data processing.
+        preferred_lang: Preferred language for data processing.
     """
 
     def __init__(
             self,
             data_path: str = "resources/L2/data_pipeline/raw_data",
-            prefered_lang: str = "English",
+            preferred_lang: str = "English",
     ):
         """Initialize the L2DataProcessor.
         
         Args:
             data_path: Base path for data processing. Defaults to "resources/L2/data_pipeline/raw_data".
-            prefered_lang: Preferred language for data processing. Defaults to "English".
+            preferred_lang: Preferred language for data processing. Defaults to "English".
         """
         self.data_path = data_path
-        self.prefered_lang = prefered_lang
+        self.preferred_lang = preferred_lang
 
     def __call__(self, note_list: List[Note], basic_info: Dict) -> Any:
         """Process a list of notes with basic user information.
@@ -650,7 +650,7 @@ class L2DataProcessor:
             bio: User's bio information.
         """
         processor = PreferenceQAGenerator(
-            filename=topics_path, bio=bio, preference_language=self.prefered_lang
+            filename=topics_path, bio=bio, preference_language=self.preferred_lang
         )
         processor.process_clusters(preference_output_path)
 
@@ -675,7 +675,7 @@ class L2DataProcessor:
             global_bio: User's global biography.
             config_path: Path to configuration file.
         """
-        processor = DiversityDataGenerator(self.prefered_lang)
+        processor = DiversityDataGenerator(self.preferred_lang)
         processor.generate_data(
             entitys_path, note_list, config_path, graph_path, user_name, global_bio, output_path
         )
@@ -693,7 +693,7 @@ class L2DataProcessor:
             user_name=user_name,
             user_input_introduction=user_intro,
             user_global_bio=bio,
-            preferred_language=self.prefered_lang,
+            preferred_language=self.preferred_lang,
         )
         q_a_list = selfqa.generate_qa()
         with open(output_path, "w", encoding="utf-8") as f:
@@ -725,7 +725,7 @@ class L2DataProcessor:
             global_bio: User's global biography.
         """
         context_generator = ContextGenerator(
-            preferred_language=self.prefered_lang,
+            preferred_language=self.preferred_lang,
             user_name=user_name,
             user_bio=global_bio
         )
