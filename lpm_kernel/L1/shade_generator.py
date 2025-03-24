@@ -168,7 +168,7 @@ Domain Timelines:
         return raw_shade_info
 
 
-    def _inital_shade_process(self, new_memory_list: List[Note]) -> Optional[ShadeInfo]:
+    def _initial_shade_process(self, new_memory_list: List[Note]) -> Optional[ShadeInfo]:
         """Processes the initial shade generation from new memories.
         
         Args:
@@ -337,7 +337,7 @@ Recent Memories:
             logging.info(
                 f"Shades initial Process! Current shade have {len(new_memory_list)} memories!"
             )
-            new_shade = self._inital_shade_process(new_memory_list)
+            new_shade = self._initial_shade_process(new_memory_list)
         elif shade_info_list and old_memory_list:
             if len(shade_info_list) > 1:
                 logging.info(
