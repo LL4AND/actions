@@ -48,7 +48,7 @@ Launch your AI self from your laptop onto our decentralized network—anyone or 
 </p>
 
 ### 100% **Privacy and Control**
-Unlike traditional centralized AI systems, Second Me ensures that your information and intelligence remains local and completely private.
+Unlike traditional centralized AI systems, Second Me ensures that your information and intelligence remain local and completely private.
 
 
 
