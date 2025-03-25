@@ -404,7 +404,8 @@ class ContextGenerator:
                 logging.error(f"Error parsing cot_result: {cot_result}. Error: {e}")
         
         # Save the results to a file
-        json.dump(needsAndRelatedNotesTodos_res, open(output_file, 'w', encoding='utf-8'), indent=4, ensure_ascii=False)
+        with open(output_file, 'w', encoding='utf-8') as file:
+            json.dump(needsAndRelatedNotesTodos_res, file, indent=4, ensure_ascii=False)
         
         return needsAndRelatedNotesTodos_res
 
@@ -433,7 +434,8 @@ class ContextGenerator:
             json.dump(note_data, f, ensure_ascii=False, indent=4)
         
         # Load the cleaned note data
-        all_notes = json.load(open(cleaned_note_file_path, 'r', encoding='utf-8'))
+        with open(cleaned_note_file_path, 'r', encoding='utf-8') as file:
+            all_notes = json.load(file)
         
         # Prepare string representations of notes
         all_note_str = "\n\n".join([
