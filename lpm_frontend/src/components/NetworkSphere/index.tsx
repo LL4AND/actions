@@ -22,6 +22,19 @@ const NetworkSphere: React.FC<NetworkSphereProps> = ({ onInitialized }) => {
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const checkWebGLAvailability = (): boolean => {
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+        return !!gl;
+      } catch {
+        return false;
+      }
+    };
+
     // Store animation frame ID for cleanup
     let animationFrameId: number;
     // Store scene and renderer references for cleanup
@@ -43,11 +56,23 @@ const NetworkSphere: React.FC<NetworkSphereProps> = ({ onInitialized }) => {
       camera.position.z = 650;
 
       // Create renderer
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      rendererRef.current = renderer;
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      containerRef.current.appendChild(renderer.domElement);
+      try {
+        if (!checkWebGLAvailability()) {
+          throw new Error('Your browser does not support WebGL');
+        }
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        rendererRef.current = renderer;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        containerRef.current.appendChild(renderer.domElement);
+      } catch (error) {
+        console.error('WebGL renderer creation failed:', error);
+
+        onInitialized?.();
+
+        return;
+      }
 
       // Define sphere radius
       const radius = 320;
@@ -83,13 +108,6 @@ const NetworkSphere: React.FC<NetworkSphereProps> = ({ onInitialized }) => {
         dot.position.set(...node.position);
         scene.add(dot);
       });
-
-      // Create connections between nodes
-      // const connectionMaterial = new THREE.LineBasicMaterial({
-      //   color: 0xadd8e6, // Light blue color - keeping original color
-      //   transparent: true,
-      //   opacity: 0.35 // Increased opacity to make lines more visible
-      // });
 
       // Connect each node with more nearby nodes
       const maxConnections = 5; // Increased maximum number of connections per node
