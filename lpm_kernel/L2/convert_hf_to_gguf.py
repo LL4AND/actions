@@ -3272,7 +3272,8 @@ class InternLM2Model(Model):
             sys.exit(1)
 
         sentencepiece_model = model.ModelProto()  # pyright: ignore[reportAttributeAccessIssue]
-        sentencepiece_model.ParseFromString(open(tokenizer_path, "rb").read())
+        with open(tokenizer_path, "rb") as file:
+            sentencepiece_model.ParseFromString(file.read())
         add_prefix = sentencepiece_model.normalizer_spec.add_dummy_prefix
 
         tokenizer = SentencePieceProcessor()
@@ -3719,7 +3720,8 @@ class XLMRobertaModel(BertModel):
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
         sentencepiece_model = model.ModelProto()  # pyright: ignore[reportAttributeAccessIssue]
-        sentencepiece_model.ParseFromString(open(tokenizer_path, "rb").read())
+        with open(tokenizer_path, "rb") as file:
+            sentencepiece_model.ParseFromString(file.read())
         assert sentencepiece_model.trainer_spec.model_type == 1  # UNIGRAM
 
         add_prefix = sentencepiece_model.normalizer_spec.add_dummy_prefix
@@ -4898,7 +4900,8 @@ class T5Model(Model):
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
         sentencepiece_model = model.ModelProto()  # pyright: ignore[reportAttributeAccessIssue]
-        sentencepiece_model.ParseFromString(open(tokenizer_path, "rb").read())
+        with open(tokenizer_path, "rb") as file:
+            sentencepiece_model.ParseFromString(file.read())
 
         # some models like Pile-T5 family use BPE tokenizer instead of Unigram
         if sentencepiece_model.trainer_spec.model_type == 2:  # BPE
@@ -5058,7 +5061,8 @@ class T5EncoderModel(Model):
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
         sentencepiece_model = model.ModelProto()  # pyright: ignore[reportAttributeAccessIssue]
-        sentencepiece_model.ParseFromString(open(tokenizer_path, "rb").read())
+        with open(tokenizer_path, "rb") as file:
+            sentencepiece_model.ParseFromString(file.read())
 
         # some models like Pile-T5 family use BPE tokenizer instead of Unigram
         if sentencepiece_model.trainer_spec.model_type == 2:  # BPE

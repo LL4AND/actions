@@ -95,7 +95,9 @@ class Progress:
         progress_dir = os.path.join(os.getcwd(), "data/progress")
         if not os.path.exists(progress_dir):
             os.makedirs(progress_dir)
-        self.progress_file = os.path.join(progress_dir, progress_file)
+        self.progress_file = os.path.normpath(os.path.join(progress_dir, progress_file))
+        if not self.progress_file.startswith(progress_dir):
+            raise ValueError("Invalid progress file path")
         self.progress = TrainProgress()
         self.progress_callback = progress_callback
         self.logger = logging.getLogger(__name__)

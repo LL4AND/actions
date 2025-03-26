@@ -357,7 +357,11 @@ def save_hf_model(model_name="Qwen2.5-0.5B-Instruct", log_file_path=None) -> str
     # Setup logging
     logger = setup_logger(log_file_path)
     
-    save_path = os.path.join(os.getcwd(), "resources/L2/base_models", model_name)
+    base_dir = os.path.join(os.getcwd(), "resources/L2/base_models")
+    normalized_model_name = os.path.normpath(model_name)
+    if ".." in normalized_model_name or normalized_model_name.startswith("/"):
+        raise ValueError("Invalid model name")
+    save_path = os.path.join(base_dir, normalized_model_name)
     os.makedirs(save_path, exist_ok=True)
 
     from huggingface_hub import list_repo_files, configure_http_backend

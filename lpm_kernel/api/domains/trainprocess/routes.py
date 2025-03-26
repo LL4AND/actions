@@ -2,7 +2,7 @@ import json
 import logging
 import time
 from pathlib import Path
-
+from werkzeug.utils import secure_filename
 from flask import Blueprint, jsonify, Response, request
 
 from lpm_kernel.file_data.trainprocess_service import TrainProcessService
@@ -170,9 +170,10 @@ def stream_logs():
 @trainprocess_bp.route("/progress/<model_name>", methods=["GET"])
 def get_progress(model_name):
     """Get current progress (non-real-time)"""
-    progress_name = f'trainprocess_progress_{model_name}.json'  # Build filename based on the provided model_name
+    sanitized_model_name = secure_filename(model_name)  # Sanitize model_name
+    progress_name = f'trainprocess_progress_{sanitized_model_name}.json'  # Build filename based on the sanitized model_name
     try:
-        train_service = TrainProcessService(progress_file=progress_name, model_name=model_name)  # Pass in specific progress file
+        train_service = TrainProcessService(progress_file=progress_name, model_name=sanitized_model_name)  # Pass in specific progress file
         progress = train_service.progress.progress
 
         return jsonify(
