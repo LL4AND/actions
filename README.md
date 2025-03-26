@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ![Second Me](https://github.com/mindverse/Second-Me/blob/master/images/cover.png)
 
 <div align="center">
@@ -217,3 +218,6 @@ Second Me is open source software licensed under the Apache License 2.0. See the
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=mindverse/Second-Me&type=Date" />
  </picture>
 </a>
+=======
+Gym Website
+>>>>>>> f3ff2b9c6074be0f691379f36f0cd2decedd0237

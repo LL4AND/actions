@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 1.Privacy-First AI Training Pipeline
 Develop a decentralized AI training framework that runs securely on local devices (like laptops, edge servers).
 
@@ -12,3 +13,7 @@ Create an AI identity protocol for securely linking individual AIs while ensurin
 Develop peer-to-peer AI networking that enables different Second Me instances to share knowledge while respecting user control.
 
 Design smart contracts for AI-to-AI interactions using blockchain to enforce transparency and fairness.
+=======
+YashGoyal
+2410990487
+>>>>>>> f3ff2b9c6074be0f691379f36f0cd2decedd0237

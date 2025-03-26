@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 __pycache__
 .DS_Store
 .idea
@@ -71,3 +72,8 @@ run/*
 #config
 .backend.pid
 .frontend.pid
+=======
+*.log
+node_modules/
+*.env
+>>>>>>> f3ff2b9c6074be0f691379f36f0cd2decedd0237
