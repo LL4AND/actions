@@ -70,6 +70,29 @@ export default function PlaygroundChat() {
 
       return newSettings;
     });
+
+    if (!messages.filter((item) => item.role === 'system')) {
+      const systemMessage: Message = {
+        id: generateMessageId(),
+        content: originPrompt,
+        role: 'system',
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      };
+      setMessages((messages) => [systemMessage, ...messages]);
+    } else {
+      const newMessages = messages.map((msg) => {
+        if (msg.role === 'system') {
+          return { ...msg, content: originPrompt };
+        }
+
+        return msg;
+      });
+
+      setMessages(newMessages);
+    }
   }, [originPrompt]);
 
   const scrollToBottom = () => {
@@ -192,16 +215,19 @@ export default function PlaygroundChat() {
 
     // Send request
     const chatRequest: ChatRequest = {
-      message: content,
-      system_prompt: settings.systemPrompt || '',
-      enable_l0_retrieval: settings.enableL0Retrieval,
-      enable_l1_retrieval: settings.enableL1Retrieval,
-      temperature: settings.temperature,
-      history: messages.map((msg) => ({
-        role: msg.role === 'user' ? 'user' : 'assistant',
+      messages: messages.map((msg) => ({
+        role: msg.role,
         content: msg.content
-      }))
+      })),
+      metadata: {
+        enable_l0_retrieval: settings.enableL0Retrieval,
+        enable_l1_retrieval: settings.enableL1Retrieval
+      },
+      temperature: settings.temperature,
+      stream: true
     };
+
+    console.log('chatRequest', chatRequest)
 
     await sendStreamMessage(chatRequest);
   };
