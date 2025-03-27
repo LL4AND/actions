@@ -705,7 +705,7 @@ class TrainProcessService:
                 download_success = self.model_download()
                 if not download_success:
                     self.logger.error(f"Failed to download model '{self.model_name}'")
-                    self.progress.mark_step_failed(ProcessStep.TRAIN)
+                    self.progress.mark_step_failed(ProcessStep.MODEL_DOWNLOAD)
                     return False
             
             # Prepare log directory and file
