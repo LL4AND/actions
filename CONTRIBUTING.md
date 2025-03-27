@@ -17,10 +17,10 @@ The Second Me community welcomes various forms of contributions, including code,
 * Sign [CLA of Mindverse](https://cla-assistant.io/mindverse/Second-Me)
   
 ## Here is a checklist to prepare and submit your PR (pull request).
-* Create your own Github branch by forking Second Me
+* Create your own GitHub branch by forking Second Me
 * Checkout [README]() for how to deploy Second Me.
 * Push changes to your personal fork.
-* Create a PR with a detail description, if commit messages do not express themselves.
+* Create a PR with a detailed description, if commit messages do not express themselves.
 * Submit PR for review and address all feedbacks.
 * Wait for merging (done by committers).
 

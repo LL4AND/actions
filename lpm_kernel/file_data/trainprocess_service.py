@@ -6,7 +6,6 @@ import re
 import time
 import psutil
 from lpm_kernel.configs.config import Config
-import logging
 from lpm_kernel.L1.utils import save_true_topics
 from lpm_kernel.L1.serializers import NotesStorage
 from lpm_kernel.kernel.note_service import NoteService
@@ -28,6 +27,9 @@ from lpm_kernel.kernel.l1.l1_manager import generate_l1_from_l0
 import threading
 from ..api.domains.trainprocess.progress import TrainProgress, Status, Step, Status
 import gc
+
+from lpm_kernel.configs.logging import get_train_process_logger, TRAIN_LOG_FILE
+logger = get_train_process_logger()
 
 class ProcessStep(Enum):
     """Training process steps"""
@@ -100,7 +102,7 @@ class Progress:
             raise ValueError("Invalid progress file path")
         self.progress = TrainProgress()
         self.progress_callback = progress_callback
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
         self._load_progress()
 
     def _load_progress(self):
@@ -267,7 +269,7 @@ class TrainProcessService:
             if model_name:
                 progress_file = f"trainprocess_progress_{model_name}.json"
             self.progress = Progress(progress_file, progress_callback)
-            self.logger = logging.getLogger(__name__)
+            self.logger = logger
             self.model_name = None  # Initialize as None
             self._initialized = True
             
@@ -697,16 +699,21 @@ class TrainProcessService:
             # Get paths for the model
             paths = self._get_model_paths(self.model_name)
             
-            # Check if model exists
-            if not os.path.exists(paths["base_path"]):
-                self.logger.error(f"Model '{self.model_name}' does not exist, please download first")
-                self.progress.mark_step_failed(ProcessStep.TRAIN)
-                return False
+            # Check if the model directory exists and has the necessary files
+            config_file = os.path.join(paths["base_path"], "config.json")
+            if not os.path.exists(paths["base_path"]) or not os.path.exists(config_file):
+                self.logger.info(f"Model '{self.model_name}' needs to be downloaded or is missing config.json")
+                # Call model_download to download the model
+                download_success = self.model_download()
+                if not download_success:
+                    self.logger.error(f"Failed to download model '{self.model_name}'")
+                    self.progress.mark_step_failed(ProcessStep.MODEL_DOWNLOAD)
+                    return False
             
             # Prepare log directory and file
             log_dir = os.path.join(os.getcwd(), "logs")
             os.makedirs(log_dir, exist_ok=True)
-            log_path = os.path.join(log_dir, "train.log")
+            log_path = os.path.join(log_dir, "train", "train.log")
             self.logger.info(f"Log file path: {log_path}")
             
             # Ensure output directory exists
@@ -728,7 +735,7 @@ class TrainProcessService:
             
             self.logger.info("Training started, monitoring progress")
             # start monitoring training progress
-            return self._monitor_training_progress()
+            return self._monitor_training_progress(log_path)
             
         except Exception as e:
             self.logger.error(f"Failed to start training: {str(e)}")
@@ -807,12 +814,9 @@ class TrainProcessService:
             self.logger.error(f"Failed to start training process: {str(e)}")
             return False
 
-    def _monitor_training_progress(self) -> bool:
+    def _monitor_training_progress(self, log_file) -> bool:
         """Monitor training progress"""
         try:
-            log_dir = os.path.join(os.getcwd(), "logs")
-            log_file = os.path.join(log_dir, "train.log")
-            
             # Initialize last_position to the end of file to only process new content
             try:
                 with open(log_file, 'r') as f:
@@ -895,8 +899,9 @@ class TrainProcessService:
     def _monitor_model_download(self) -> bool:
         """Monitor model download progress"""
         try:
-            log_dir = os.path.join(os.getcwd(), "logs")
-            log_file = os.path.join(log_dir, "model_download.log")
+            # log_dir = os.path.join(os.getcwd(), "logs")
+            # log_file = os.path.join(log_dir, "model_download.log")
+            log_file = TRAIN_LOG_FILE
             
             # Initialize last_position to the end of file to only process new content
             try:

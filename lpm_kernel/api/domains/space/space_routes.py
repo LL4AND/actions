@@ -60,7 +60,7 @@ def create_space() -> dict:
         # Handle other validation errors
         return APIResponse.error(message=str(e), code=400)
     except Exception as e:
-        logger.error(' errror. ', exc_info=True)
+        logger.error(' error. ', exc_info=True)
         # Handle other errors
         return APIResponse.error(message=str(e), code=500)
 
@@ -157,7 +157,7 @@ async def start_discussion(space_id: str) -> dict:
     except ValueError as e:
         return APIResponse.error(message=str(e), code=404)
     except Exception as e:
-        logger.error(' errror. ', exc_info=True)
+        logger.error(' error. ', exc_info=True)
         return APIResponse.error(message=str(e), code=500)
 
 

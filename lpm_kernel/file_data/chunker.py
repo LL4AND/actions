@@ -1,11 +1,11 @@
 from typing import List
 from lpm_kernel.L1.bio import Chunk
-import logging
 import traceback
 import time
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-logger = logging.getLogger(__name__)
+from lpm_kernel.configs.logging import get_train_process_logger
+logger = get_train_process_logger()
 
 
 class DocumentChunker:

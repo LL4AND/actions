@@ -1,5 +1,5 @@
 """
-service about knowledge retrive
+service about knowledge retrieve
 """
 import logging
 from typing import List, Tuple, Dict, Any, Optional

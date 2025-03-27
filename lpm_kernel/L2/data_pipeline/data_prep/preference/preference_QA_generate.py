@@ -207,8 +207,8 @@ class PreferenceQAGenerator:
             contents: List of content chunks.
             chunk_concat: Concatenated text chunks.
         """
-        num_chunk_refered = 30
-        n_repeat = max(1, int(len(contents) * 1 / num_chunk_refered))
+        num_chunk_referred = 30
+        n_repeat = max(1, int(len(contents) * 1 / num_chunk_referred))
         chunk_content_list = [
             self.clean_chunk(content)
             for content in contents
@@ -221,7 +221,7 @@ class PreferenceQAGenerator:
             if i % 5 == 0 and i > 0:
                 logging.info(f"Repeat {i} times")
             selected_chunks = random.sample(
-                chunk_content_list, min(len(chunk_content_list), num_chunk_refered)
+                chunk_content_list, min(len(chunk_content_list), num_chunk_referred)
             )
             chunk_concat = "\n".join(selected_chunks)
             prompt_question_template = self.prompt_templates["query"]
