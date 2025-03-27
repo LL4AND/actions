@@ -21,7 +21,7 @@
 1. 克隆项目并安装依赖：
 ```bash
 git clone https://github.com/mindverse/second-me.git
-cd second-me
+cd second-me/integrate
 pip install -r requirements.txt
 ```
 
