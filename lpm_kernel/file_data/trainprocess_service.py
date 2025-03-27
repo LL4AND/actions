@@ -697,11 +697,16 @@ class TrainProcessService:
             # Get paths for the model
             paths = self._get_model_paths(self.model_name)
             
-            # Check if model exists
-            if not os.path.exists(paths["base_path"]):
-                self.logger.error(f"Model '{self.model_name}' does not exist, please download first")
-                self.progress.mark_step_failed(ProcessStep.TRAIN)
-                return False
+            # Check if the model directory exists and has the necessary files
+            config_file = os.path.join(paths["base_path"], "config.json")
+            if not os.path.exists(paths["base_path"]) or not os.path.exists(config_file):
+                self.logger.info(f"Model '{self.model_name}' needs to be downloaded or is missing config.json")
+                # Call model_download to download the model
+                download_success = self.model_download()
+                if not download_success:
+                    self.logger.error(f"Failed to download model '{self.model_name}'")
+                    self.progress.mark_step_failed(ProcessStep.TRAIN)
+                    return False
             
             # Prepare log directory and file
             log_dir = os.path.join(os.getcwd(), "logs")
