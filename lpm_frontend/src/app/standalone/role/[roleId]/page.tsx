@@ -131,7 +131,7 @@ export default function RoleChat() {
 
     // Send request
     const chatRequest: ChatRequest = {
-      messages: messages.map((msg) => ({
+      messages: newMessages.map((msg) => ({
         role: msg.role,
         content: msg.content
       })),

@@ -70,29 +70,6 @@ export default function PlaygroundChat() {
 
       return newSettings;
     });
-
-    if (!messages.filter((item) => item.role === 'system')) {
-      const systemMessage: Message = {
-        id: generateMessageId(),
-        content: originPrompt,
-        role: 'system',
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      };
-      setMessages((messages) => [systemMessage, ...messages]);
-    } else {
-      const newMessages = messages.map((msg) => {
-        if (msg.role === 'system') {
-          return { ...msg, content: originPrompt };
-        }
-
-        return msg;
-      });
-
-      setMessages(newMessages);
-    }
   }, [originPrompt]);
 
   const scrollToBottom = () => {
@@ -196,7 +173,28 @@ export default function PlaygroundChat() {
     };
 
     // Update message list, adding user message and empty assistant message
-    const newMessages = [...messages, userMessage, assistantMessage];
+    let newMessages = [...messages, userMessage, assistantMessage];
+
+    const systemMessage: Message = {
+      id: generateMessageId(),
+      content: originPrompt,
+      role: 'system',
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    };
+
+    if (!newMessages.filter((item) => item.role === 'system')) {
+      newMessages = [systemMessage, ...newMessages]
+    } else {
+      newMessages = messages.map((msg) => {
+        if (msg.role === 'system') {
+          return { ...msg, content: originPrompt };
+        }
+        return msg;
+      });
+    }
 
     setMessages(newMessages);
 
@@ -215,7 +213,7 @@ export default function PlaygroundChat() {
 
     // Send request
     const chatRequest: ChatRequest = {
-      messages: messages.map((msg) => ({
+      messages: newMessages.map((msg) => ({
         role: msg.role,
         content: msg.content
       })),
