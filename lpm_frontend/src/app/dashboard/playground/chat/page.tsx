@@ -149,6 +149,11 @@ export default function PlaygroundChat() {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(newSettings));
   };
 
+  useEffect(() => {
+    console.log('messages', messages);
+    console.log('filerMessage',messages.filter((message) => message.role !== 'system'));
+  }, [messages])
+
   const handleSendMessage = async (content: string) => {
     // Create user message
     const userMessage: Message = {
@@ -188,7 +193,7 @@ export default function PlaygroundChat() {
     if (!newMessages.find((item) => item.role === 'system')) {
       newMessages = [systemMessage, ...newMessages]
     } else {
-      newMessages = messages.map((msg) => {
+      newMessages = newMessages.map((msg) => {
         if (msg.role === 'system') {
           return { ...msg, content: originPrompt };
         }
@@ -224,8 +229,6 @@ export default function PlaygroundChat() {
       temperature: settings.temperature,
       stream: true
     };
-
-    console.log('chatRequest', chatRequest)
 
     await sendStreamMessage(chatRequest);
   };

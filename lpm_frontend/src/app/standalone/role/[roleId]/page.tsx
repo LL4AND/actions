@@ -138,7 +138,7 @@ export default function RoleChat() {
     if (!newMessages.find((item) => item.role === 'system')) {
       newMessages = [systemMessage, ...newMessages]
     } else {
-      newMessages = messages.map((msg) => {
+      newMessages = newMessages.map((msg) => {
         if (msg.role === 'system') {
           return { ...msg, content: role?.system_prompt ||'' };
         }
