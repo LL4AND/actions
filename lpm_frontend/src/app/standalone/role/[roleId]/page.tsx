@@ -123,7 +123,29 @@ export default function RoleChat() {
     };
 
     // Update message list, add user message and empty assistant message
-    const newMessages = [...messages, userMessage, assistantMessage];
+    let newMessages = [...messages, userMessage, assistantMessage];
+
+    const systemMessage: IChatMessage = {
+      id: generateMessageId(),
+      content: role?.system_prompt ||'',
+      role: 'system',
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    };
+
+    if (!newMessages.find((item) => item.role === 'system')) {
+      newMessages = [systemMessage, ...newMessages]
+    } else {
+      newMessages = messages.map((msg) => {
+        if (msg.role === 'system') {
+          return { ...msg, content: role?.system_prompt ||'' };
+        }
+        return msg;
+      });
+    }
+
 
     setMessages(newMessages);
     // Save messages
@@ -234,7 +256,7 @@ export default function RoleChat() {
         <div className="flex-1 flex flex-col">
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4">
-            {messages.map((msg, index) => (
+            {messages.filter((message) => message.role !== 'system').map((msg, index) => (
               <ChatMessage
                 key={msg.id}
                 isLoading={

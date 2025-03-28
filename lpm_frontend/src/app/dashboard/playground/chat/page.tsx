@@ -185,7 +185,7 @@ export default function PlaygroundChat() {
       })
     };
 
-    if (!newMessages.filter((item) => item.role === 'system')) {
+    if (!newMessages.find((item) => item.role === 'system')) {
       newMessages = [systemMessage, ...newMessages]
     } else {
       newMessages = messages.map((msg) => {
@@ -299,7 +299,7 @@ export default function PlaygroundChat() {
           ) : (
             <>
               <div className="mx-auto w-full space-y-6">
-                {messages.map((message, index) => (
+                {messages.filter((message) => message.role !== 'system').map((message, index) => (
                   <ChatMessage
                     key={message.id}
                     isLoading={
