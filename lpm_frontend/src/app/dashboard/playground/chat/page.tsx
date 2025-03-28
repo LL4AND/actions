@@ -149,11 +149,6 @@ export default function PlaygroundChat() {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(newSettings));
   };
 
-  useEffect(() => {
-    console.log('messages', messages);
-    console.log('filerMessage',messages.filter((message) => message.role !== 'system'));
-  }, [messages])
-
   const handleSendMessage = async (content: string) => {
     // Create user message
     const userMessage: Message = {
@@ -302,7 +297,7 @@ export default function PlaygroundChat() {
           ) : (
             <>
               <div className="mx-auto w-full space-y-6">
-                {messages.filter((message) => message.role !== 'system').map((message, index) => (
+                {messages.map((message, index) => (
                   <ChatMessage
                     key={message.id}
                     isLoading={
@@ -311,7 +306,7 @@ export default function PlaygroundChat() {
                       index === messages.length - 1 &&
                       message.role === 'assistant'
                     }
-                    isUser={message.role === 'user'}
+                    role={message.role}
                     message={message.content}
                     timestamp={message.timestamp}
                   />

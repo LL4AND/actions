@@ -166,8 +166,6 @@ export default function RoleChat() {
       stream: true
     };
 
-    console.log('chatRequest', chatRequest)
-
     await sendStreamMessage(chatRequest);
   };
 
@@ -256,7 +254,7 @@ export default function RoleChat() {
         <div className="flex-1 flex flex-col">
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4">
-            {messages.filter((message) => message.role !== 'system').map((msg, index) => (
+            {messages.map((msg, index) => (
               <ChatMessage
                 key={msg.id}
                 isLoading={
@@ -265,7 +263,7 @@ export default function RoleChat() {
                   index === messages.length - 1 &&
                   msg.role === 'assistant'
                 }
-                isUser={msg.role === 'user'}
+                role={msg.role}
                 message={msg.content}
                 timestamp={msg.timestamp}
               />
