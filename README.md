@@ -200,6 +200,87 @@ make docker-restart-frontend
 
 </details>
 
+
+### 🖥️ Option 3: Manual Setup (Cross-Platform Guide)
+
+<details>
+<summary><b>Click to expand/collapse single or multi-OS setup details</b></summary>
+
+In this section, we explore how to deploy both the frontend and backend on a single server, as well as how to enable cross-server communication between the frontend and backend using separate servers.
+
+##### ✅ Prerequisites
+- Miniforge/Miniconda
+
+##### 📦 Install Dependencies 
+The following scripts are sourced from [`scripts/setup.sh`](https://github.com/mindverse/Second-Me/blob/master/scripts/setup.sh) and [`scripts\start_local.sh`](https://github.com/mindverse/Second-Me/blob/master/scripts/start_local.sh).
+
+🐍 Python Environment Setup with Conda and Poetry
+We recommend managing the Python environment using Miniconda, and handling dependencies with Poetry. While Conda and Poetry are independent tools, they can be used together effectively:
+
+- Conda provides flexible and isolated environment management.
+- Poetry offers strict and declarative dependency management.
+
+Below is a step-by-step example of combining them:
+```bash
+# Set up Python Environment
+conda create -n secondme python=3.12
+conda activate secondme
+
+# (Recommand) Install Poetry inside the Conda environment
+# This avoids using system-wide Poetry and keeps dependencies isolated
+pip install poetry
+
+# (Optional) Set a custom Python package index (e.g., TUNA mirror for better speed in China)
+poetry source add tuna https://pypi.tuna.tsinghua.edu.cn/simple
+poetry source set-default tuna
+
+poetry install --no-root --no-interaction
+
+# Install specific version of GraphRAG from local archive
+# ⚠️ Adjust the path separator based on your OS (e.g., \ on Windows, / on Unix)
+pip install --force-reinstall dependencies\graphrag-1.2.1.dev27.tar.gz 
+```
+
+```bash
+# Install Frontend Dependencies 
+cd lpm_frontend
+npm install
+cd ..
+
+# Build llama.cpp Dependencies 
+unzip -q dependencies/llama.cpp.zip
+cd llama.cpp
+mkdir -p build && cd build
+cmake ..
+cmake --build . --config Release
+cd ../..
+```
+
+##### Run Servers
+
+```bash
+# Initialize SQL Database
+mkdir -p "./data/sqlite"
+cat docker/sqlite/init.sql | sqlite3 ./data/sqlite/lpm.db
+
+# Initialize ChromaDB Database
+mkdir -p logs
+python docker/app/init_chroma.py
+
+# Start the Backend Server (develop mode)
+python -m flask run --host=0.0.0.0 --port=8002 >> "logs/backend.log" 2>&1
+# If deploying in a production environment, please use `nohup` and `disown` commands to keep it running persistently in the background.
+
+# Start the Frontend Server (Open Another Terminal Shell)
+cd lpm_frontend
+npm run build
+npm run start
+```
+
+> :information_source: **Note**: If the frontend and backend are deployed on separate servers, make sure to configure the `HOST_ADDRESS` in the `.env` file accordingly.
+
+</details>
+
 ### Accessing the Service
 
 After starting the service (either with local setup or Docker), open your browser and visit:
