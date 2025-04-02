@@ -78,7 +78,7 @@ class Progress:
     def __init__(
         self, progress_file: str = "trainprocess_progress.json", progress_callback=None
     ):
-        progress_dir = os.path.join(os.getcwd(), "data/progress")
+        progress_dir = os.path.join(os.getcwd(), "data", "progress")
         if not os.path.exists(progress_dir):
             os.makedirs(progress_dir)
         self.progress_file = os.path.normpath(os.path.join(progress_dir, progress_file))
