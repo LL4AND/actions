@@ -110,8 +110,11 @@ status:
 # Set Docker environment variable for all Docker commands
 docker-%: export IN_DOCKER_ENV=1
 
-# 检测是否安装了 docker compose 插件
+ifeq ($(OS),Windows_NT)
+DOCKER_COMPOSE_CMD := docker compose
+else
 DOCKER_COMPOSE_CMD := $(shell if command -v docker compose >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
+endif
 
 docker-build:
 	$(DOCKER_COMPOSE_CMD) build
