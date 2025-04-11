@@ -5,6 +5,14 @@ services:
       dockerfile: ${DOCKER_BACKEND_DOCKERFILE:-Dockerfile.backend}
     container_name: second-me-backend
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64G
+        reservations:
+          memory: 6G
+    # Use NVIDIA runtime if available
+    runtime: nvidia
     ports:
       - "8002:8002"
       - "8080:8080"
@@ -20,16 +28,11 @@ services:
       - LOCAL_APP_PORT=8002
       - IN_DOCKER_ENV=1
       - PLATFORM=${PLATFORM:-linux}
+      # Add NVIDIA environment variables to enable GPU support
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    deploy:
-      resources:
-        limits:
-          # Set container memory limit to 24GB
-          memory: 64G
-        reservations:
-          # Memory reservation
-          memory: 6G
     networks:
       - second-me-network
 

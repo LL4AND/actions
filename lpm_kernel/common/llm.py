@@ -3,6 +3,8 @@ from lpm_kernel.configs.config import Config
 from typing import List, Union
 import requests
 import numpy as np
+import os
+import torch
 from lpm_kernel.configs.logging import get_train_process_logger
 logger = get_train_process_logger()
 
@@ -14,8 +16,17 @@ class LLMClient:
         self.config = Config.from_env()
         self.user_llm_config_service = UserLLMConfigService()
         self.embedding_max_text_length = int(self.config.get('EMBEDDING_MAX_TEXT_LENGTH', 8000))
+        
+        # Check for CUDA availability and set up the device accordingly
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            logger.info(f"CUDA is available. Using device: {torch.cuda.get_device_name(0)}")
+            # Set environment variable for CUDA operations
+            os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        else:
+            logger.info("CUDA not available. Using CPU for tensor operations.")
+        
         # self.user_llm_config = self.user_llm_config_service.get_available_llm()
-
         # self.chat_api_key = self.user_llm_config.chat_api_key
         # self.chat_base_url = self.user_llm_config.chat_endpoint
         # self.chat_model = self.user_llm_config.chat_model_name
@@ -76,7 +87,13 @@ class LLMClient:
 
             # Extract embedding vectors
             embeddings = [item["embedding"] for item in result["data"]]
-            embeddings_array = np.array(embeddings)
+            
+            # Convert to tensor if CUDA is available for faster processing
+            if torch.cuda.is_available():
+                embeddings_tensor = torch.tensor(embeddings, device=self.device)
+                embeddings_array = embeddings_tensor.cpu().numpy()
+            else:
+                embeddings_array = np.array(embeddings)
 
             # If we split any texts, we need to merge their embeddings back
             if sum(text_chunk_counts) > len(texts):
@@ -86,7 +103,14 @@ class LLMClient:
                     if chunk_count > 1:
                         # Average embeddings for split text
                         chunk_embeddings = embeddings_array[start_idx:start_idx + chunk_count]
-                        avg_embedding = np.mean(chunk_embeddings, axis=0)
+                        
+                        # Use GPU for averaging if available
+                        if torch.cuda.is_available():
+                            chunk_tensor = torch.tensor(chunk_embeddings, device=self.device)
+                            avg_embedding = torch.mean(chunk_tensor, dim=0).cpu().numpy()
+                        else:
+                            avg_embedding = np.mean(chunk_embeddings, axis=0)
+                            
                         final_embeddings.append(avg_embedding)
                     else:
                         final_embeddings.append(embeddings_array[start_idx])

@@ -19,27 +19,37 @@ RUN mkdir -p /app/dependencies /app/data/sqlite /app/data/chroma_db /app/logs /a
 COPY dependencies/graphrag-1.2.1.dev27.tar.gz /app/dependencies/
 COPY dependencies/llama.cpp.zip /app/dependencies/
 
-# Build llama.cpp
+# Cross-platform CUDA check and llama.cpp build - Fixed logic
 RUN LLAMA_LOCAL_ZIP="dependencies/llama.cpp.zip" \
     && echo "Using local llama.cpp archive..." \
     && unzip -q "$LLAMA_LOCAL_ZIP" \
     && cd llama.cpp \
     && mkdir -p build && cd build \
-    && cmake .. \
-    && cmake --build . --config Release \
+    && echo "Checking for GPU capabilities..." \
+    && if command -v nvidia-smi >/dev/null 2>&1 || [ -c /dev/nvidia0 ] || [ -d /proc/driver/nvidia ] || [ -f /usr/lib/wsl/lib/libnvidia-ml.so ]; then \
+         echo "GPU detected, enabling CUDA support"; \
+         cmake .. -DGGML_CUDA=ON; \
+       else \
+         echo "No GPU detected, using CPU only build"; \
+         cmake ..; \
+       fi \
+    && cmake --build . --config Release -j$(nproc) \
     && if [ ! -f "bin/llama-server" ]; then \
          echo "Build failed: llama-server executable not found" && exit 1; \
        else \
          echo "Successfully built llama-server"; \
        fi
 
-# 
 # Copy project configuration - Files that occasionally change
 COPY pyproject.toml README.md /app/
 
 RUN poetry install --no-interaction --no-root
-RUN pip install --force-reinstall dependencies/graphrag-1.2.1.dev27.tar.gz
 
+# Install PyTorch with CUDA support
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 \
+    && python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda if torch.cuda.is_available() else 'N/A'); print('GPU device count:', torch.cuda.device_count() if torch.cuda.is_available() else 0); print('GPU device name:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A')"
+
+RUN pip install --force-reinstall dependencies/graphrag-1.2.1.dev27.tar.gz
 
 # Copy source code - Files that frequently change
 COPY docker/ /app/docker/

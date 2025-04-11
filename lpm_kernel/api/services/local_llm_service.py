@@ -4,6 +4,7 @@ import logging
 import psutil
 import time
 import subprocess
+import torch
 from typing import Iterator, Any, Optional, Generator, Dict
 from datetime import datetime
 from flask import Response
@@ -11,6 +12,7 @@ from openai import OpenAI
 from lpm_kernel.api.domains.kernel2.dto.server_dto import ServerStatus, ProcessInfo
 from lpm_kernel.configs.config import Config
 import uuid
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +38,89 @@ class LocalLLMService:
             )
         return self._client
 
+    def _detect_gpu_availability(self) -> bool:
+        """
+        Cross-platform GPU detection that works on macOS, Linux, Windows, 
+        including Docker and WSL2 environments
+        """
+        # Method 1: Check using PyTorch
+        if torch.cuda.is_available():
+            cuda_device = 0
+            cuda_name = torch.cuda.get_device_name(cuda_device)
+            logger.info(f"CUDA detected via PyTorch. Using device: {cuda_name}")
+            return True
+            
+        # Platform-specific checks
+        current_platform = platform.system().lower()
+        
+        # Method 2: Check for NVIDIA device files (Linux, WSL2)
+        if current_platform == "linux" and (
+            os.path.exists("/dev/nvidia0") or 
+            os.path.exists("/proc/driver/nvidia")
+        ):
+            logger.info("NVIDIA GPU detected via device files")
+            return True
+            
+        # Method 3: Try running nvidia-smi (cross-platform)
+        try:
+            # Use different commands based on platform
+            if current_platform == "windows":
+                # Check for Windows nvidia-smi
+                result = subprocess.run(
+                    ["where", "nvidia-smi"], 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    check=False,
+                    timeout=3
+                )
+                if result.returncode == 0:
+                    # nvidia-smi exists, now try to run it
+                    nvidia_smi = subprocess.run(
+                        ["nvidia-smi"], 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE,
+                        check=False,
+                        timeout=3
+                    )
+                    if nvidia_smi.returncode == 0:
+                        logger.info("NVIDIA GPU detected via nvidia-smi on Windows")
+                        return True
+            else:
+                # Linux/macOS check
+                result = subprocess.run(
+                    ["which", "nvidia-smi"],
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    check=False,
+                    timeout=3
+                )
+                if result.returncode == 0:
+                    # nvidia-smi exists, now try to run it
+                    nvidia_smi = subprocess.run(
+                        ["nvidia-smi"], 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE,
+                        check=False,
+                        timeout=3
+                    )
+                    if nvidia_smi.returncode == 0:
+                        logger.info("NVIDIA GPU detected via nvidia-smi")
+                        return True
+        except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+            logger.debug(f"Error checking for nvidia-smi: {e}")
+        
+        # Method 4: Check for WSL-specific NVIDIA integration
+        if os.path.exists("/usr/lib/wsl/lib/libnvidia-ml.so"):
+            logger.info("NVIDIA GPU detected via WSL2 integration")
+            return True
+            
+        # No GPU detected
+        logger.info("No NVIDIA GPU detected. Using CPU only.")
+        return False
+
     def start_server(self, model_path: str) -> bool:
         """
-        Start the llama-server service
+        Start the llama-server service with CUDA support if available
         """
         try:
             # Check if server is already running
@@ -47,7 +129,7 @@ class LocalLLMService:
                 logger.info("LLama server is already running")
                 return True
 
-            # Start server
+            # Base command
             cmd = [
                 "llama-server",
                 "-m", model_path,
@@ -55,11 +137,29 @@ class LocalLLMService:
                 "--port", "8000"
             ]
             
+            # Check for GPU availability using our cross-platform detection
+            if self._detect_gpu_availability():
+                # Add GPU-specific parameters
+                cmd.extend([
+                    "--n-gpu-layers", "99",  # Use as many layers on GPU as possible
+                    "--parallel", "2"        # Increase parallelization for better performance
+                ])
+                
+                # Set CUDA environment variables
+                os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+                
+                logger.info("Starting llama-server with GPU acceleration")
+            else:
+                logger.info("Starting llama-server with CPU only")
+            
+            logger.info(f"Starting llama-server with command: {cmd}")
+            
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                universal_newlines=True
+                universal_newlines=True,
+                env=dict(os.environ)
             )
             
             # Wait for server to start
