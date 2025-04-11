@@ -11,7 +11,7 @@
 
 </div>
 
-> ⚠️ This is a demo edit to trigger CodeRabbit for demo purposes with @adamstewartai.
+> ✅ Second demo trigger for CodeRabbit — checking if it works from my own branch.
 ## Our Vision
 
 Companies like OpenAI built "Super AI" that threatens human independence. We crave individuality: AI that amplifies, not erases, **YOU**.
