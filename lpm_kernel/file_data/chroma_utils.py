@@ -77,10 +77,13 @@ def reinitialize_chroma_collections(dimension: int = 1536) -> bool:
         
         # Delete and recreate document collection
         try:
-            client.delete_collection(name="documents")
-            logger.info("Deleted 'documents' collection")
-        except ValueError:
-            logger.info("'documents' collection does not exist")
+            # Check if collection exists before attempting to delete
+            try:
+                client.get_collection(name="documents")
+                client.delete_collection(name="documents")
+                logger.info("Deleted 'documents' collection")
+            except ValueError:
+                logger.info("'documents' collection does not exist, will create new")
         except Exception as e:
             logger.error(f"Error deleting 'documents' collection: {str(e)}", exc_info=True)
             return False
@@ -101,10 +104,13 @@ def reinitialize_chroma_collections(dimension: int = 1536) -> bool:
         
         # Delete and recreate chunk collection
         try:
-            client.delete_collection(name="document_chunks")
-            logger.info("Deleted 'document_chunks' collection")
-        except ValueError:
-            logger.info("'document_chunks' collection does not exist")
+            # Check if collection exists before attempting to delete
+            try:
+                client.get_collection(name="document_chunks")
+                client.delete_collection(name="document_chunks")
+                logger.info("Deleted 'document_chunks' collection")
+            except ValueError:
+                logger.info("'document_chunks' collection does not exist, will create new")
         except Exception as e:
             logger.error(f"Error deleting 'document_chunks' collection: {str(e)}", exc_info=True)
             return False
@@ -128,15 +134,17 @@ def reinitialize_chroma_collections(dimension: int = 1536) -> bool:
             doc_collection = client.get_collection(name="documents")
             chunk_collection = client.get_collection(name="document_chunks")
             
-            if doc_collection.metadata.get("dimension") != dimension:
-                logger.error(f"Verification failed: 'documents' collection has incorrect dimension: {doc_collection.metadata.get('dimension')} vs {dimension}")
+            doc_dimension = doc_collection.metadata.get("dimension")
+            if doc_dimension != dimension:
+                logger.error(f"Verification failed: 'documents' collection has incorrect dimension: {doc_dimension} vs {dimension}")
                 return False
                 
-            if chunk_collection.metadata.get("dimension") != dimension:
-                logger.error(f"Verification failed: 'document_chunks' collection has incorrect dimension: {chunk_collection.metadata.get('dimension')} vs {dimension}")
+            chunk_dimension = chunk_collection.metadata.get("dimension")
+            if chunk_dimension != dimension:
+                logger.error(f"Verification failed: 'document_chunks' collection has incorrect dimension: {chunk_dimension} vs {dimension}")
                 return False
                 
-            logger.info("Verification successful: Both collections have correct dimension")
+            logger.info(f"Verification successful: Both collections have correct dimension: {dimension}")
         except Exception as e:
             logger.error(f"Error verifying collections: {str(e)}", exc_info=True)
             return False
