@@ -1,3 +1,6 @@
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 from transformers import TrainingArguments, AutoTokenizer, AutoModelForCausalLM
 import torch
 import logging
@@ -234,7 +237,7 @@ def main(model_args, data_args, training_args):
         tokenizer,
     )
 
-    response_template = "\n<|im_start|>assistant\n"
+    response_template = "\n<|im_end|>assistant\n"
 
     collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
     
@@ -391,7 +394,13 @@ def main(model_args, data_args, training_args):
 
         # Start training
         logger.info("Starting actual training process...")
-        trainer.train(resume_from_checkpoint=checkpoint)
+        try:
+            trainer.train(resume_from_checkpoint=checkpoint)
+        except torch.cuda.OutOfMemoryError as e:
+            logger.error(f"CUDA out of memory error: {str(e)}")
+            torch.cuda.empty_cache()
+            logger.info("Freed up GPU memory, retrying backward pass...")
+            trainer.train(resume_from_checkpoint=checkpoint)
     except Exception as e:
         logger.error(f"Error during training: {str(e)}")
         logger.error(f"Error type: {type(e)}")
