@@ -4,7 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import InfoModal from '@/components/InfoModal';
 import type { TrainingParams } from '@/service/train';
-import { startTrain, stopTrain, retrain, getModelName, getTrainingParams } from '@/service/train';
+import { 
+  startTrain, 
+  stopTrain, 
+  retrain, 
+  getModelName, 
+  getTrainingParams, 
+  checkCudaAvailability 
+} from '@/service/train';
 import { useTrainingStore } from '@/store/useTrainingStore';
 import { getMemoryList } from '@/service/memory';
 import { message, Modal } from 'antd';
@@ -59,7 +66,15 @@ export default function TrainingPage() {
 
   const [selectedInfo, setSelectedInfo] = useState<boolean>(false);
   const [isTraining, setIsTraining] = useState(false);
-  const [trainingParams, setTrainingParams] = useState<TrainingParams>({} as TrainingParams);
+  // Set default training parameters
+  const [trainingParams, setTrainingParams] = useState<TrainingParams>({
+    data_synthesis_mode: 'medium',
+    learning_rate: 0.0002,
+    number_of_epochs: 3,
+    concurrency_threads: 4,
+    use_cuda: false
+  });
+  const [cudaAvailable, setCudaAvailable] = useState<boolean>(false);
   const [nowTrainingParams, setNowTrainingParams] = useState<TrainingParams | null>(null);
   const [trainActionLoading, setTrainActionLoading] = useState(false);
 
@@ -305,6 +320,25 @@ export default function TrainingPage() {
       .catch((error) => {
         message.error(error.message);
       });
+      
+    // Check CUDA availability
+    checkCudaAvailability()
+      .then((res) => {
+        if (res.data.code === 0) {
+          const { cuda_available, cuda_info } = res.data.data;
+          setCudaAvailable(cuda_available);
+          
+          if (cuda_available) {
+            console.log('CUDA is available:', cuda_info);
+          } else {
+            console.log('CUDA is not available on this system');
+          }
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to check CUDA availability:', error);
+        setCudaAvailable(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -339,45 +373,34 @@ export default function TrainingPage() {
     const eventSource = new EventSource('/api/trainprocess/logs');
 
     eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
+      // Don't try to parse as JSON, just use the raw text data directly
+      const logMessage = event.data;
+      
+      setTrainingDetails((prev) => {
+        const newLogs = [
+          ...prev.slice(-500), // Keep more log entries (500 instead of 100)
+          {
+            message: logMessage,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          }
+        ];
 
-        setTrainingDetails((prev) => {
-          const newLogs = [
-            ...prev.slice(-100),
-            {
-              message: data.message,
-              timestamp: new Date().toISOString()
-            }
-          ];
+        // Save logs to localStorage for persistence between page refreshes
+        localStorage.setItem('trainingLogs', JSON.stringify(newLogs));
 
-          // Save logs to localStorage
-          // localStorage.setItem('trainingLogs', JSON.stringify(newLogs));
-
-          return newLogs;
-        });
-      } catch {
-        setTrainingDetails((prev) => {
-          const newLogs = [
-            ...prev.slice(-100),
-            {
-              message: event.data,
-              timestamp: new Date().toISOString()
-            }
-          ];
-
-          // Save logs to localStorage
-          // localStorage.setItem('trainingLogs', JSON.stringify(newLogs));
-
-          return newLogs;
-        });
-      }
+        return newLogs;
+      });
     };
 
     eventSource.onerror = (error) => {
       console.error('EventSource failed:', error);
       eventSource.close();
-      message.error('Failed to get training logs');
+      message.error('Failed to get training logs. Will attempt to reconnect in 5 seconds...');
+      
+      // Try to reconnect after 5 seconds
+      setTimeout(() => {
+        getDetails();
+      }, 5000);
     };
 
     return () => {
@@ -579,6 +602,7 @@ export default function TrainingPage() {
           baseModelOptions={baseModelOptions}
           changeBaseModel={changeBaseModel}
           config={config}
+          cudaAvailable={cudaAvailable}
           handleTrainingAction={handleTrainingAction}
           isResume={isResume}
           isTraining={isTraining}

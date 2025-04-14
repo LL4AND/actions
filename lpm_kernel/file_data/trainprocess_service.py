@@ -793,13 +793,18 @@ class TrainProcessService:
             num_train_epochs = training_params.get("number_of_epochs")
             concurrency_threads = training_params.get("concurrency_threads")
             data_synthesis_mode = training_params.get("data_synthesis_mode")
+            use_cuda = training_params.get("use_cuda", False)
+            
+            # Convert use_cuda to string "True" or "False" for the shell script
+            use_cuda_str = "True" if use_cuda else "False"
             
             # Log training parameters
-            logger.info("Training parameters from latest settings:")
-            logger.info(f"  Learning rate: {learning_rate}")
-            logger.info(f"  Number of epochs: {num_train_epochs}")
-            logger.info(f"  Concurrency threads: {concurrency_threads}")
-            logger.info(f"  Data synthesis mode: {data_synthesis_mode}")
+            self.logger.info("Training parameters from latest settings:")
+            self.logger.info(f"  Learning rate: {learning_rate}")
+            self.logger.info(f"  Number of epochs: {num_train_epochs}")
+            self.logger.info(f"  Concurrency threads: {concurrency_threads}")
+            self.logger.info(f"  Data synthesis mode: {data_synthesis_mode}")
+            self.logger.info(f"  Use CUDA: {use_cuda}")  # Log the actual boolean value
             
             # Prepare arguments for the script
             # Build command line arguments, need to include script path as the first parameter
@@ -808,7 +813,8 @@ class TrainProcessService:
                 "--lr", str(learning_rate),
                 "--epochs", str(num_train_epochs),
                 "--threads", str(concurrency_threads),
-                "--mode", str(data_synthesis_mode)
+                "--mode", str(data_synthesis_mode),
+                "--cuda", use_cuda_str  # Add CUDA flag here
             ]
             
             # Ensure log directory exists

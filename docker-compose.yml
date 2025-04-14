@@ -1,5 +1,6 @@
 services:
   backend:
+    # Comment out the build section and use the image we saved with CUDA support
     build:
       context: .
       dockerfile: ${DOCKER_BACKEND_DOCKERFILE:-Dockerfile.backend}
@@ -15,11 +16,13 @@ services:
       - ./resources:/app/resources
       - ./docker:/app/docker
       - ./.env:/app/.env
+      - llama-cpp-build:/app/llama.cpp/build  # Persist the llama.cpp build
     environment:
       # Environment variables
       - LOCAL_APP_PORT=8002
       - IN_DOCKER_ENV=1
       - PLATFORM=${PLATFORM:-linux}
+      # Removed SKIP_LLAMA_REBUILD=true to allow proper CUDA rebuilding
     extra_hosts:
       - "host.docker.internal:host-gateway"
     deploy:
@@ -30,6 +33,10 @@ services:
         reservations:
           # Memory reservation
           memory: 6G
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     networks:
       - second-me-network
 
@@ -62,3 +69,7 @@ services:
 networks:
   second-me-network:
     driver: bridge
+
+volumes:
+  llama-cpp-build:
+    driver: local

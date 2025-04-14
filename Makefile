@@ -106,7 +106,8 @@ else
 	@echo "  make docker-down           - Stop all Docker containers"
 	@echo "  make docker-build-backend  - Build only backend Docker image"
 	@echo "  make docker-build-frontend - Build only frontend Docker image"
-	@echo "  make docker-restart-backend - Restart only backend container"
+	@echo "  make docker-restart-backend - Restart only backend container (with rebuild)"
+	@echo "  make docker-restart-backend-fast - Restart backend without rebuilding (faster)"
 	@echo "  make docker-restart-frontend - Restart only frontend container"
 	@echo "  make docker-restart-all    - Restart all Docker containers"
 	@echo ""
@@ -170,10 +171,17 @@ docker-build-backend:
 docker-build-frontend:
 	$(DOCKER_COMPOSE_CMD) build frontend
 
+# Standard backend restart with complete rebuild
 docker-restart-backend:
 	$(DOCKER_COMPOSE_CMD) stop backend
 	$(DOCKER_COMPOSE_CMD) rm -f backend
 	$(DOCKER_COMPOSE_CMD) build backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
+	$(DOCKER_COMPOSE_CMD) up -d backend
+
+# Fast backend restart without rebuilding (uses existing image)
+docker-restart-backend-fast:
+	$(DOCKER_COMPOSE_CMD) stop backend
+	$(DOCKER_COMPOSE_CMD) rm -f backend
 	$(DOCKER_COMPOSE_CMD) up -d backend
 
 docker-restart-frontend:

@@ -5,10 +5,34 @@ from .api import init_routes
 from .api.file_server.handler import FileServerHandler
 import os
 import atexit
+import subprocess
+
+
+def ensure_cuda_support():
+    """Run the script to ensure CUDA support for GPU acceleration"""
+    if os.path.exists('/app/docker/app/ensure_cuda_support.sh'):
+        try:
+            logger.info("Checking CUDA support for GPU acceleration...")
+            result = subprocess.run(
+                ['/app/docker/app/ensure_cuda_support.sh'], 
+                check=True, 
+                capture_output=True, 
+                text=True
+            )
+            logger.info(f"CUDA check result: {result.stdout}")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to run CUDA support check: {str(e)}")
+            logger.error(f"Error output: {e.stderr}")
+    else:
+        logger.info("CUDA support script not found, skipping check.")
 
 
 def create_app():
     app = Flask(__name__)
+
+    # Ensure CUDA support for GPU acceleration
+    if os.getenv('IN_DOCKER_ENV') == '1':
+        ensure_cuda_support()
 
     # Initialize database connection
     try:

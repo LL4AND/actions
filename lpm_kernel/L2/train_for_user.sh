@@ -6,6 +6,7 @@ NUM_TRAIN_EPOCHS="3"
 CONCURRENCY_THREADS="2"
 DATA_SYNTHESIS_MODE="low"
 HALF=False
+USE_CUDA=False
 
 # Process parameters
 while [[ "$#" -gt 0 ]]; do
@@ -14,6 +15,15 @@ while [[ "$#" -gt 0 ]]; do
         --epochs) NUM_TRAIN_EPOCHS="$2"; shift ;;
         --threads) CONCURRENCY_THREADS="$2"; shift ;;
         --mode) DATA_SYNTHESIS_MODE="$2"; shift ;;
+        --cuda) 
+            # Convert string to lowercase for consistent comparison
+            cuda_value=$(echo "$2" | tr '[:upper:]' '[:lower:]')
+            if [[ "$cuda_value" == "true" ]]; then
+                USE_CUDA=True
+            else
+                USE_CUDA=False
+            fi
+            shift ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
@@ -25,6 +35,7 @@ echo "  Learning rate: $LEARNING_RATE"
 echo "  Number of epochs: $NUM_TRAIN_EPOCHS"
 echo "  Concurrency threads: $CONCURRENCY_THREADS"
 echo "  Data synthesis mode: $DATA_SYNTHESIS_MODE"
+echo "  Use CUDA: $USE_CUDA"
 
 # If concurrency threads are set, configure related environment variables
 if [ "$CONCURRENCY_THREADS" != "1" ]; then
@@ -76,5 +87,6 @@ python lpm_kernel/L2/train.py \
   --use_4bit_quantization False \
   --use_nested_quant False \
   --bnb_4bit_compute_dtype "bfloat16" \
-  --is_cot False
+  --is_cot False \
+  --use_cuda $USE_CUDA
 
