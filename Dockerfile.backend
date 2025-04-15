@@ -19,6 +19,13 @@ RUN mkdir -p /app/dependencies /app/data/sqlite /app/data/chroma_db /app/logs /a
 COPY dependencies/graphrag-1.2.1.dev27.tar.gz /app/dependencies/
 COPY dependencies/llama.cpp.zip /app/dependencies/
 
+# Copy CUDA build scripts early so they're available during build
+COPY docker/app/rebuild_llama_cuda.sh /app/
+COPY docker/app/ensure_cuda_support.sh /app/
+COPY docker/app/check_gpu_support.sh /app/
+COPY docker/app/check_torch_cuda.py /app/
+RUN chmod +x /app/rebuild_llama_cuda.sh /app/ensure_cuda_support.sh /app/check_gpu_support.sh
+
 # Build llama.cpp with conditional CUDA support
 RUN LLAMA_LOCAL_ZIP="dependencies/llama.cpp.zip" \
     && echo "Using local llama.cpp archive..." \
@@ -26,32 +33,32 @@ RUN LLAMA_LOCAL_ZIP="dependencies/llama.cpp.zip" \
     && cd llama.cpp \
     && mkdir -p build && cd build \
     && if nvidia-smi &>/dev/null; then \
-         echo "NVIDIA GPU detected, attempting to build with CUDA support..." && \
-         # Look for CUDA libraries from Python packages \
-         CUDA_RUNTIME=$(find /usr -name 'libcudart.so*' | head -1) && \
-         if [ -n "$CUDA_RUNTIME" ]; then \
-           CUDA_PATH=$(dirname $(dirname $CUDA_RUNTIME)) && \
-           echo "Found CUDA runtime at: $CUDA_RUNTIME" && \
-           echo "Setting CUDA_PATH to: $CUDA_PATH" && \
-           # Use CMake to find CUDA components \
-           CMAKE_OPTS="-DGGML_CUDA=ON -DCMAKE_PREFIX_PATH=$CUDA_PATH" && \
-           echo "Building with CUDA support using options: $CMAKE_OPTS" && \
-           cmake $CMAKE_OPTS .. ; \
-         else \
-           echo "CUDA runtime libraries not found, building without GPU support" && \
-           cmake .. ; \
-         fi; \
+         echo "NVIDIA GPU detected, building with CUDA support..." && \
+         cd /app && \
+         FORCE_CUDA_REBUILD=true /app/rebuild_llama_cuda.sh && \
+         echo "llama.cpp successfully built with CUDA support"; \
        else \
          echo "No NVIDIA GPU detected, building without CUDA support" && \
-         cmake .. ; \
+         cmake .. && \
+         cmake --build . --config Release -j && \
+         echo "llama.cpp built without CUDA support (no GPU detected during build)"; \
        fi \
-    && cmake --build . --config Release -j \
-    && if [ ! -f "bin/llama-server" ]; then \
+    && if [ ! -f "/app/llama.cpp/build/bin/llama-server" ]; then \
          echo "Build failed: llama-server executable not found" && exit 1; \
        else \
          echo "Successfully built llama-server"; \
        fi \
-    && chmod +x bin/llama-server bin/llama-cli
+    && chmod +x /app/llama.cpp/build/bin/llama-server /app/llama.cpp/build/bin/llama-cli 2>/dev/null || true
+
+# Mark CUDA build status for runtime reference
+RUN mkdir -p /app/data && \
+    if nvidia-smi &>/dev/null && ldd /app/llama.cpp/build/bin/llama-server | grep -q "libcuda"; then \
+      echo "{ \"gpu_optimized\": true, \"optimized_on\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\" }" > /app/data/gpu_optimized.json && \
+      echo "Created GPU optimization marker file"; \
+    else \
+      echo "{ \"gpu_optimized\": false, \"optimized_on\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\" }" > /app/data/gpu_optimized.json && \
+      echo "Created CPU-only marker file"; \
+    fi
 
 # Copy project configuration - Files that occasionally change
 COPY pyproject.toml README.md /app/
@@ -62,9 +69,6 @@ RUN pip install --force-reinstall dependencies/graphrag-1.2.1.dev27.tar.gz
 # Copy source code - Files that frequently change
 COPY docker/ /app/docker/
 COPY lpm_kernel/ /app/lpm_kernel/
-
-# Make the CUDA rebuild script executable
-RUN chmod +x /app/docker/app/rebuild_llama_cuda.sh
 
 # Check module import
 RUN python -c "import lpm_kernel; print('Module import check passed')"
@@ -82,5 +86,5 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose ports
 EXPOSE 8002 8080
 
-# Set the startup command
-CMD ["bash", "-c", "echo \"Checking llama.cpp CUDA support at runtime...\" && /app/docker/app/ensure_cuda_support.sh && echo \"Checking SQLite database...\" && if [ ! -s /app/data/sqlite/lpm.db ]; then echo \"SQLite database not found or empty, initializing...\" && mkdir -p /app/data/sqlite && sqlite3 /app/data/sqlite/lpm.db \".read /app/docker/sqlite/init.sql\" && echo \"SQLite database initialized successfully\" && echo \"Tables created:\" && sqlite3 /app/data/sqlite/lpm.db \".tables\"; else echo \"SQLite database already exists, skipping initialization\"; fi && echo \"Checking ChromaDB...\" && if [ ! -d /app/data/chroma_db/documents ] || [ ! -d /app/data/chroma_db/document_chunks ]; then echo \"ChromaDB collections not found, initializing...\" && python /app/docker/app/init_chroma.py && echo \"ChromaDB initialized successfully\"; else echo \"ChromaDB already exists, skipping initialization\"; fi && echo \"Starting application at $(date)\" >> /app/logs/backend.log && cd /app && python -m flask run --host=0.0.0.0 --port=${LOCAL_APP_PORT:-8002} >> /app/logs/backend.log 2>&1"]
+# Set the startup command - NOTE: No longer rebuilding llama.cpp at runtime
+CMD ["bash", "-c", "echo \"Checking SQLite database...\" && if [ ! -s /app/data/sqlite/lpm.db ]; then echo \"SQLite database not found or empty, initializing...\" && mkdir -p /app/data/sqlite && sqlite3 /app/data/sqlite/lpm.db \".read /app/docker/sqlite/init.sql\" && echo \"SQLite database initialized successfully\" && echo \"Tables created:\" && sqlite3 /app/data/sqlite/lpm.db \".tables\"; else echo \"SQLite database already exists, skipping initialization\"; fi && echo \"Checking ChromaDB...\" && if [ ! -d /app/data/chroma_db/documents ] || [ ! -d /app/data/chroma_db/document_chunks ]; then echo \"ChromaDB collections not found, initializing...\" && python /app/docker/app/init_chroma.py && echo \"ChromaDB initialized successfully\"; else echo \"ChromaDB already exists, skipping initialization\"; fi && echo \"Starting application at $(date)\" >> /app/logs/backend.log && cd /app && python -m flask run --host=0.0.0.0 --port=${LOCAL_APP_PORT:-8002} >> /app/logs/backend.log 2>&1"]

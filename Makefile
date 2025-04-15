@@ -1,4 +1,4 @@
-.PHONY: install test format lint all setup start stop restart restart-backend restart-force help docker-build docker-up docker-down docker-build-backend docker-build-frontend docker-restart-backend docker-restart-frontend docker-restart-all
+.PHONY: install test format lint all setup start stop restart restart-backend restart-force help docker-build docker-up docker-down docker-build-backend docker-build-frontend docker-restart-backend docker-restart-frontend docker-restart-all docker-check-cuda docker-build-cuda
 
 # Detect operating system and set environment
 ifeq ($(OS),Windows_NT)
@@ -71,6 +71,8 @@ ifeq ($(WINDOWS),1)
 	@echo   make docker-restart-backend - Restart only backend container
 	@echo   make docker-restart-frontend - Restart only frontend container
 	@echo   make docker-restart-all    - Restart all Docker containers
+	@echo   make docker-check-cuda     - Check CUDA support in containers
+	@echo   make docker-build-cuda     - Force rebuild with CUDA support
 	@echo.
 	@echo All Available Commands:
 	@echo   make help                  - Show this help message
@@ -110,6 +112,8 @@ else
 	@echo "  make docker-restart-backend-fast - Restart backend without rebuilding (faster)"
 	@echo "  make docker-restart-frontend - Restart only frontend container"
 	@echo "  make docker-restart-all    - Restart all Docker containers"
+	@echo "  make docker-check-cuda     - Check CUDA support in containers"
+	@echo "  make docker-build-cuda     - Force rebuild with CUDA support"
 	@echo ""
 	@echo "$(COLOR_BOLD)All Available Commands:$(COLOR_RESET)"
 	@echo "  make help                  - Show this help message"
@@ -159,7 +163,19 @@ endif
 docker-build:
 	$(DOCKER_COMPOSE_CMD) build
 
+# Standard docker-up command enhanced with GPU detection
 docker-up:
+	@echo "Checking for NVIDIA GPU capabilities..."
+ifeq ($(WINDOWS),1)
+	@powershell -Command "if (nvidia-smi -L 2>$$null) { echo 'NVIDIA GPU detected - Docker will build with CUDA support'; $$env:FORCE_CUDA_REBUILD='true' } else { echo 'No NVIDIA GPU detected - Docker will build without CUDA support' }"
+else
+	@if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then \
+		echo "$(COLOR_GREEN)NVIDIA GPU detected - Docker will build with CUDA support$(COLOR_RESET)"; \
+		export FORCE_CUDA_REBUILD=true; \
+	else \
+		echo "$(COLOR_GRAY)No NVIDIA GPU detected - Docker will build without CUDA support$(COLOR_RESET)"; \
+	fi
+endif
 	$(DOCKER_COMPOSE_CMD) up -d
 
 docker-down:
@@ -195,6 +211,22 @@ docker-restart-all:
 	$(DOCKER_COMPOSE_CMD) rm -f
 	$(DOCKER_COMPOSE_CMD) build || { echo "$(COLOR_RED)❌ Build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
 	$(DOCKER_COMPOSE_CMD) up -d
+
+# New command to check CUDA support in containers
+docker-check-cuda:
+	@echo "Checking CUDA support in Docker containers..."
+ifeq ($(WINDOWS),1)
+	@echo Running CUDA support check in backend container
+	@docker exec second-me-backend /app/docker/app/check_gpu_support.sh || echo No GPU support detected in backend container
+else
+	@echo "$(COLOR_CYAN)Running CUDA support check in backend container:$(COLOR_RESET)"
+	@docker exec second-me-backend /app/docker/app/check_gpu_support.sh || echo "$(COLOR_RED)No GPU support detected in backend container$(COLOR_RESET)"
+endif
+
+# New command to force rebuild with CUDA support
+docker-build-cuda:
+	@echo "Forcing rebuild of backend container with CUDA support..."
+	./scripts/rebuild_with_cuda.sh
 
 install:
 	poetry install
