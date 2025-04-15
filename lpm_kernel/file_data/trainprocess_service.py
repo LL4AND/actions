@@ -221,7 +221,8 @@ class TrainProcessService:
         "learning_rate": 1e-4,
         "number_of_epochs": 3,
         "concurrency_threads": 2,
-        "data_synthesis_mode": "low"
+        "data_synthesis_mode": "low",
+        "use_cuda": False  # Added CUDA support flag
     }
 
     def __new__(cls, *args, **kwargs):
@@ -799,12 +800,12 @@ class TrainProcessService:
             use_cuda_str = "True" if use_cuda else "False"
             
             # Log training parameters
-            self.logger.info("Training parameters from latest settings:")
-            self.logger.info(f"  Learning rate: {learning_rate}")
-            self.logger.info(f"  Number of epochs: {num_train_epochs}")
-            self.logger.info(f"  Concurrency threads: {concurrency_threads}")
-            self.logger.info(f"  Data synthesis mode: {data_synthesis_mode}")
-            self.logger.info(f"  Use CUDA: {use_cuda}")  # Log the actual boolean value
+            logger.info("Training parameters from latest settings:")
+            logger.info(f"  Learning rate: {learning_rate}")
+            logger.info(f"  Number of epochs: {num_train_epochs}")
+            logger.info(f"  Concurrency threads: {concurrency_threads}")
+            logger.info(f"  Data synthesis mode: {data_synthesis_mode}")
+            logger.info(f"  Use CUDA: {use_cuda}")  # Log the actual boolean value
             
             # Prepare arguments for the script
             # Build command line arguments, need to include script path as the first parameter
