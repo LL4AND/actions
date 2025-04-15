@@ -202,7 +202,36 @@ def main(model_args, data_args, training_args):
     # Apply PyTorch memory optimizations to training arguments
     logger.info("Applying memory optimizations to training configuration")
     training_args = memory_manager.optimize_training_args(training_args)
-    
+
+    # Ensure DataLoader uses pin_memory=True
+    training_args.dataloader_pin_memory = True
+
+    # --- Accelerate optimizer state offloading logic ---
+    # Enable optimizer state offload to CPU if VRAM is low and not using DeepSpeed
+    vram_total = memory_manager.get_memory_info().get("vram_total_gb", 0)
+    use_accelerate_offload = False
+    if torch.cuda.is_available() and model_args.use_cuda and vram_total > 0 and vram_total < 16:
+        # Only set if not already using DeepSpeed
+        if not hasattr(training_args, "deepspeed") or training_args.deepspeed is None:
+            logger.info("Enabling Hugging Face Accelerate optimizer state offload to CPU for low VRAM GPUs")
+            accelerate_config = {
+                "compute_environment": "LOCAL_MACHINE",
+                "deepspeed_config": None,
+                "distributed_type": "NO",
+                "downcast_bf16": False,
+                "fsdp_config": {},
+                "main_training_function": "main",
+                "mixed_precision": "no",
+                "num_machines": 1,
+                "num_processes": 1,
+                "use_cpu": False,
+                "zero3_init_flag": False,
+                "offload_optimizer_device": "cpu",
+                "offload_param_device": "none"
+            }
+            training_args.accelerate_config = accelerate_config
+            use_accelerate_offload = True
+
     # Model loading with device_map="auto" for automatic offloading
     logger.info(f"Loading model with automatic memory management from {model_args.model_name_or_path}")
     
