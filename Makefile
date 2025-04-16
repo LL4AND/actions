@@ -1,4 +1,4 @@
-.PHONY: install test format lint all setup start stop restart restart-backend restart-force help docker-build docker-up docker-down docker-build-backend docker-build-frontend docker-restart-backend docker-restart-frontend docker-restart-all docker-check-cuda
+.PHONY: install test format lint all setup start stop restart restart-backend restart-force help docker-build docker-up docker-down docker-build-backend docker-build-frontend docker-restart-backend docker-restart-backend-fast docker-restart-backend-smart docker-restart-frontend docker-restart-all docker-check-cuda
 
 # Detect operating system and set environment
 ifeq ($(OS),Windows_NT)
@@ -69,6 +69,7 @@ ifeq ($(WINDOWS),1)
 	@echo   make docker-build-backend  - Build only backend Docker image
 	@echo   make docker-build-frontend - Build only frontend Docker image
 	@echo   make docker-restart-backend - Restart only backend container
+	@echo   make docker-restart-backend-fast - Restart backend without rebuilding llama.cpp
 	@echo   make docker-restart-frontend - Restart only frontend container
 	@echo   make docker-restart-all    - Restart all Docker containers
 	@echo   make docker-check-cuda     - Check CUDA support in containers
@@ -109,6 +110,7 @@ else
 	@echo "  make docker-build-frontend - Build only frontend Docker image"
 	@echo "  make docker-restart-backend - Restart only backend container (with rebuild)"
 	@echo "  make docker-restart-backend-fast - Restart backend without rebuilding (faster)"
+	@echo "  make docker-restart-backend-smart - Restart backend preserving llama.cpp build"
 	@echo "  make docker-restart-frontend - Restart only frontend container"
 	@echo "  make docker-restart-all    - Restart all Docker containers"
 	@echo "  make docker-check-cuda     - Check CUDA support in containers"
@@ -208,11 +210,20 @@ docker-restart-backend:
 	$(DOCKER_COMPOSE_CMD) build backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
 	$(DOCKER_COMPOSE_CMD) up -d backend
 
-# Fast backend restart without rebuilding (uses existing image)
+
+# Fast backend restart: preserves llama.cpp build but includes code changes
 docker-restart-backend-fast:
+	@echo "Smart restarting backend container (preserving llama.cpp build)..."
+	@echo "Stopping backend container..."
 	$(DOCKER_COMPOSE_CMD) stop backend
+	@echo "Removing backend container..."
 	$(DOCKER_COMPOSE_CMD) rm -f backend
+	@echo "Building backend image with build-arg to skip llama.cpp build..."
+	$(DOCKER_COMPOSE_CMD) build --build-arg SKIP_LLAMA_BUILD=true backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
+	@echo "Starting backend container..."
 	$(DOCKER_COMPOSE_CMD) up -d backend
+	@echo "Backend container smart-restarted successfully"
+	@echo "Check CUDA support with: make docker-check-cuda"
 
 docker-restart-frontend:
 	$(DOCKER_COMPOSE_CMD) stop frontend
