@@ -1,6 +1,5 @@
 services:
   backend:
-    # Comment out the build section and use the image we saved with CUDA support
     build:
       context: .
       dockerfile: ${DOCKER_BACKEND_DOCKERFILE:-Dockerfile.backend}
@@ -22,7 +21,6 @@ services:
       - LOCAL_APP_PORT=8002
       - IN_DOCKER_ENV=1
       - PLATFORM=${PLATFORM:-linux}
-      # Removed SKIP_LLAMA_REBUILD=true to allow proper CUDA rebuilding
     extra_hosts:
       - "host.docker.internal:host-gateway"
     deploy:

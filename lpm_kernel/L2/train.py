@@ -203,9 +203,6 @@ def main(model_args, data_args, training_args):
     logger.info("Applying memory optimizations to training configuration")
     training_args = memory_manager.optimize_training_args(training_args)
 
-    # Ensure DataLoader uses pin_memory=True
-    training_args.dataloader_pin_memory = True
-
     # --- Accelerate optimizer state offloading logic ---
     # Enable optimizer state offload to CPU if VRAM is low and not using DeepSpeed
     vram_total = memory_manager.get_memory_info().get("vram_total_gb", 0)

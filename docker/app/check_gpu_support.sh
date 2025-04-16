@@ -1,6 +1,5 @@
 #!/bin/bash
 # Helper script to check if GPU support is available at runtime
-# This replaces the runtime rebuild logic with a simple check
 
 # Check for GPU optimization marker
 GPU_MARKER_FILE="/app/data/gpu_optimized.json"
@@ -28,12 +27,12 @@ if [ -f "$GPU_MARKER_FILE" ]; then
         fi
     else
         echo "CPU-only build detected (built on: $OPTIMIZED_DATE)"
-        echo "To enable GPU support, rebuild the container with: scripts/rebuild_with_cuda.sh"
+        echo "To enable GPU support, use the CUDA-enabled Dockerfile (Dockerfile.backend.cuda)"
     fi
 else
     echo "No GPU optimization marker found"
-    echo "This container was likely built without checking for GPU support"
-    echo "To enable GPU support, rebuild the container with: scripts/rebuild_with_cuda.sh"
+    echo "This container was likely built with the standard CPU-only image"
+    echo "To enable GPU support, use the CUDA-enabled Dockerfile (Dockerfile.backend.cuda)"
 fi
 
 # Return CUDA status for the runtime system
@@ -44,7 +43,7 @@ if nvidia-smi &>/dev/null; then
         exit 0
     else
         echo "llama-server does not have CUDA support"
-        echo "To enable GPU support, rebuild the container with: scripts/rebuild_with_cuda.sh" 
+        echo "To enable GPU support, rebuild using: make docker-up (and select CUDA support when prompted)" 
         exit 1
     fi
 else
