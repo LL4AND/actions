@@ -76,6 +76,7 @@ def init_chroma_db():
                     }
                 )
                 print(f"Successfully created collection '{collection_name}' with dimension {dimension}")
+
         
         print(f"ChromaDB initialized at {chroma_path}")
     except Exception as e:
