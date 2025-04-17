@@ -25,189 +25,17 @@ from lpm_kernel.configs.config import Config
 from lpm_kernel.file_data.chunker import DocumentChunker
 from lpm_kernel.kernel.l1.l1_manager import generate_l1_from_l0
 import threading
-from ..api.domains.trainprocess.progress import TrainProgress, Status
+from lpm_kernel.api.domains.trainprocess.progress_enum import Status
+from lpm_kernel.api.domains.trainprocess.train_progress import TrainProgress
+from lpm_kernel.api.domains.trainprocess.process_step import ProcessStep
+from lpm_kernel.api.domains.trainprocess.progress_holder import TrainProgressHolder
+from lpm_kernel.train.training_params_manager import TrainingParamsManager
 import gc
 import subprocess
 import shlex
 
 from lpm_kernel.configs.logging import get_train_process_logger, TRAIN_LOG_FILE
 logger = get_train_process_logger()
-
-class ProcessStep(Enum):
-    """Training process steps"""
-
-    LIST_DOCUMENTS = "list_documents"
-    GENERATE_DOCUMENT_EMBEDDINGS = "generate_document_embeddings"
-    CHUNK_DOCUMENT = "process_chunks"
-    CHUNK_EMBEDDING = "chunk_embedding"
-    EXTRACT_DIMENSIONAL_TOPICS = "extract_dimensional_topics"
-    MODEL_DOWNLOAD = "model_download"
-    MAP_ENTITY_NETWORK = "map_your_entity_network"
-    DECODE_PREFERENCE_PATTERNS = "decode_preference_patterns"
-    REINFORCE_IDENTITY = "reinforce_identity"
-    AUGMENT_CONTENT_RETENTION = "augment_content_retention"
-    TRAIN = "train"
-    MERGE_WEIGHTS = "merge_weights"
-    CONVERT_MODEL = "convert_model"
-
-    @classmethod
-    def get_ordered_steps(cls) -> List["ProcessStep"]:
-        """Get ordered steps"""
-        return [
-            cls.MODEL_DOWNLOAD,
-            cls.LIST_DOCUMENTS,
-            cls.GENERATE_DOCUMENT_EMBEDDINGS,
-            cls.CHUNK_DOCUMENT,
-            cls.CHUNK_EMBEDDING,
-            cls.EXTRACT_DIMENSIONAL_TOPICS,
-            cls.MAP_ENTITY_NETWORK,
-            cls.DECODE_PREFERENCE_PATTERNS,
-            cls.REINFORCE_IDENTITY,
-            cls.AUGMENT_CONTENT_RETENTION,
-            cls.TRAIN,
-            cls.MERGE_WEIGHTS,
-            cls.CONVERT_MODEL,
-        ]
-        
-    def get_method_name(self) -> str:
-        """Get the corresponding method name for this step"""
-        return self.value
-
-
-class TrainProgressHolder:
-    """Progress management class"""
-
-    def __init__(self, progress_file: str):
-        progress_dir = os.path.join(os.getcwd(), "data", "progress")
-        if not os.path.exists(progress_dir):
-            os.makedirs(progress_dir)
-        self.progress_file = os.path.normpath(os.path.join(progress_dir, progress_file))
-        if not self.progress_file.startswith(progress_dir):
-            raise ValueError("Invalid progress file path")
-        self.progress = TrainProgress()
-
-        # Stage mapping for process steps
-        self._stage_mapping = {
-            ProcessStep.MODEL_DOWNLOAD: "downloading_the_base_model",
-
-            ProcessStep.LIST_DOCUMENTS: "activating_the_memory_matrix",
-            ProcessStep.GENERATE_DOCUMENT_EMBEDDINGS: "activating_the_memory_matrix",
-            ProcessStep.CHUNK_DOCUMENT: "activating_the_memory_matrix",
-            ProcessStep.CHUNK_EMBEDDING: "activating_the_memory_matrix",
-
-            ProcessStep.EXTRACT_DIMENSIONAL_TOPICS: "synthesize_your_life_narrative",
-            ProcessStep.MAP_ENTITY_NETWORK: "synthesize_your_life_narrative",
-
-            ProcessStep.DECODE_PREFERENCE_PATTERNS: "prepare_training_data_for_deep_comprehension",
-            ProcessStep.REINFORCE_IDENTITY: "prepare_training_data_for_deep_comprehension",
-            ProcessStep.AUGMENT_CONTENT_RETENTION: "prepare_training_data_for_deep_comprehension",
-
-            ProcessStep.TRAIN: "training_to_create_second_me",
-            ProcessStep.MERGE_WEIGHTS: "training_to_create_second_me",
-            ProcessStep.CONVERT_MODEL: "training_to_create_second_me",
-        }
-        
-        self._load_progress()
-
-    def _load_progress(self):
-        """Load progress file"""
-        if os.path.exists(self.progress_file):
-            try:
-                with open(self.progress_file, "r") as f:
-                    saved_progress = json.load(f)
-                    self.progress.data = saved_progress
-                    
-                    self.progress.stage_map = {}
-                    for stage in self.progress.data["stages"]:
-                        stage_name = stage["name"].lower().replace(" ", "_")
-                        self.progress.stage_map[stage_name] = stage
-                    
-                    self.progress.steps_map = {}
-                    for stage_name, stage in self.progress.stage_map.items():
-                        self.progress.steps_map[stage_name] = {}
-                        for step in stage["steps"]:
-                            step_name = step["name"].lower().replace(" ", "_")
-                            self.progress.steps_map[stage_name][step_name] = step
-                    
-                    # Check and reset any in_progress status to failed
-                    self._reset_in_progress_status()
-            except Exception as e:
-                logger.error(f"Error loading progress: {str(e)}")
-                # Reset progress on any error
-                self.progress = TrainProgress()
-                
-    def _reset_in_progress_status(self):
-        """Reset any in_progress status to failed after loading from file"""
-        need_save = False
-        
-        # Check overall status
-        if self.progress.data["status"] == "in_progress":
-            self.progress.data["status"] = "failed"
-            need_save = True
-            logger.info("Reset overall in_progress status to failed")
-        
-        # Check each stage
-        for stage in self.progress.data["stages"]:
-            if stage["status"] == "in_progress":
-                stage["status"] = "failed"
-                need_save = True
-                logger.info(f"Reset stage '{stage['name']}' in_progress status to failed")
-            
-            # Check each step in the stage
-            for step in stage["steps"]:
-                if step["status"] == "in_progress":
-                    step["status"] = "failed"
-                    step["completed"] = False
-                    need_save = True
-                    logger.info(f"Reset step '{step['name']}' in_progress status to failed")
-        
-        # Save changes if any were made
-        if need_save:
-            progress_dict = self.progress.to_dict()
-            with open(self.progress_file, "w") as f:
-                json.dump(progress_dict, f, indent=2)
-            logger.info("Saved progress after resetting in_progress statuses")
-
-    def _save_progress(self):
-        """Save progress"""
-        progress_dict = self.progress.to_dict()
-        with open(self.progress_file, "w") as f:
-            json.dump(progress_dict, f, indent=2)
-
-
-
-    def is_step_completed(self, step: ProcessStep) -> bool:
-        """Check if a step is completed"""
-        stage_name = self._stage_mapping[step]
-        step_name = step.value
-        step_info = self.progress.steps_map[stage_name][step_name]
-        return step_info.get("completed", False)
-
-    def mark_step_status(self, step: ProcessStep, status: Status):
-        """Mark a step with the specified status
-        
-        Args:
-            step: The process step to mark
-            status: The status to set for the step
-        """
-        stage_name = self._stage_mapping[step]
-        step_name = step.value
-        self.progress.update_progress(stage_name, step_name, status)
-        self._save_progress()
-
-    def reset_progress(self):
-        """Reset all progress"""
-        self.progress = TrainProgress()
-        self._save_progress()
-
-    def get_last_successful_step(self) -> Optional[ProcessStep]:
-        """Get the last successfully completed step"""
-        ordered_steps = ProcessStep.get_ordered_steps()
-        for step in reversed(ordered_steps):
-            if self.is_step_completed(step):
-                return step
-        return None
-
 
 class TrainProcessService:
     """Training process service (singleton pattern)"""
@@ -230,15 +58,11 @@ class TrainProcessService:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, base_url: str = None, progress_file: str = None, current_model_name: str = None, is_cot: bool = False):
+    def __init__(self, current_model_name: str = None, is_cot: bool = False):
         if not self._initialized:
-            config = Config.from_env()
-            self.base_url = base_url or config.KERNEL2_SERVICE_URL
             # Generate a unique progress file name based on model name
-            if current_model_name:
-                progress_file = f"trainprocess_progress_{current_model_name}.json"
-            self.progress = TrainProgressHolder(progress_file)
-            self.model_name = None  # Initialize as None
+            self.progress = TrainProgressHolder(current_model_name)
+            self.model_name = current_model_name  # Set model name directly
             self._initialized = True
             
             # Initialize stop flag
@@ -261,8 +85,7 @@ class TrainProcessService:
         if current_model_name is not None and current_model_name != self.model_name:
             self.model_name = current_model_name
             # Create new progress instance with updated progress file name
-            progress_file = f"trainprocess_progress_{current_model_name}.json"
-            self.progress = TrainProgressHolder(progress_file)
+            self.progress = TrainProgressHolder(current_model_name)
         self.is_cot = is_cot
 
     def list_documents(self):
@@ -376,30 +199,47 @@ class TrainProcessService:
             return False
 
     def extract_dimensional_topics(self) -> bool:
-        """Extract dimensional topics (L0 and L1)"""
+        """Extract dimensional topics (L0)"""
         try:
             # Mark step as in progress
             self.progress.mark_step_status(ProcessStep.EXTRACT_DIMENSIONAL_TOPICS, Status.IN_PROGRESS)
-            logger.info("Starting dimensional topics extraction (L0 and L1)...")
+            logger.info("Starting dimensional topics extraction (L0)...")
             
-            # Step 1: Generate L0 - Call document_service to analyze all documents
+            # Generate L0 - Call document_service to analyze all documents
             logger.info("Generating L0 data...")
             analyzed_docs = document_service.analyze_all_documents()
             logger.info(f"Successfully analyzed {len(analyzed_docs)} documents for L0")
             
-            # Step 2: Generate L1 - Direct call to L1 generator service
-            logger.info("Generating L1 data...")
-            generate_l1_from_l0()      
-            logger.info("Successfully generated L1 data")
-            
             # Mark step as completed
             self.progress.mark_step_status(ProcessStep.EXTRACT_DIMENSIONAL_TOPICS, Status.COMPLETED)
-            logger.info("Dimensional topics extraction completed successfully")
+            logger.info("Dimensional topics extraction (L0) completed successfully")
             return True
 
         except Exception as e:
-            logger.error(f"Extract dimensional topics failed: {str(e)}")
+            logger.error(f"Extract dimensional topics (L0) failed: {str(e)}")
             self.progress.mark_step_status(ProcessStep.EXTRACT_DIMENSIONAL_TOPICS, Status.FAILED)
+            return False
+            
+    def generate_biography(self) -> bool:
+        """Generate biography using L1 data"""
+        try:
+            # Mark step as in progress
+            self.progress.mark_step_status(ProcessStep.GENERATE_BIOGRAPHY, Status.IN_PROGRESS)
+            logger.info("Starting biography generation...")
+            
+            # Generate L1 data and biography
+            logger.info("Generating L1 data and biography...")
+            generate_l1_from_l0()
+            logger.info("Successfully generated L1 data and biography")
+            
+            # Mark step as completed
+            self.progress.mark_step_status(ProcessStep.GENERATE_BIOGRAPHY, Status.COMPLETED)
+            logger.info("Biography generation completed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Biography generation failed: {str(e)}")
+            self.progress.mark_step_status(ProcessStep.GENERATE_BIOGRAPHY, Status.FAILED)
             return False
 
     def model_download(self) -> bool:
@@ -460,7 +300,8 @@ class TrainProcessService:
     def decode_preference_patterns(self)->bool:
         """Decode preference patterns using notes and related data"""
         try:
-            training_params = self.__class__.get_latest_training_params()
+            params_manager = TrainingParamsManager()
+            training_params = params_manager.get_latest_training_params()
             concurrency_threads = training_params.get("concurrency_threads")
             data_synthesis_mode = training_params.get("data_synthesis_mode")
             os.environ["CONCURRENCY_THREADS"] = str(concurrency_threads)
@@ -581,7 +422,7 @@ class TrainProcessService:
 
     def _prepare_l2_data(self) -> dict:
         """Prepare common data needed for L2 generation tasks using lazy loading
-        
+
         Returns:
             Dictionary containing all L2 data:
             - notes: List of prepared notes
@@ -596,9 +437,9 @@ class TrainProcessService:
         if self.l2_data_prepared and all(self.l2_data.values()):
             logger.info("Using cached L2 data")
             return self.l2_data
-        
+
         logger.info("Preparing L2 data...")
-        
+
         # Setup directories and paths
         config = Config.from_env()
         base_dir = os.path.join(
@@ -649,16 +490,15 @@ class TrainProcessService:
             "username": LoadService.get_current_upload_name(),
             "aboutMe": LoadService.get_current_upload_description(),
             "statusBio": status_bio.content if status_bio else "Currently working on an AI project.",
-            "globalBio": global_bio.content_third_view if global_bio 
+            "globalBio": global_bio.content_third_view if global_bio
                 else "The User is a software engineer who loves programming and learning new technologies.",
             "lang": "English",
         }
-        
+
         # Mark data as prepared
         self.l2_data_prepared = True
-        
-        return self.l2_data
 
+        return self.l2_data
     def train(self) -> bool:
         """Start model training"""
         try:
@@ -789,7 +629,8 @@ class TrainProcessService:
             self.is_stopped = False
             
             # Get the latest training parameters from the class
-            training_params = self.__class__.get_latest_training_params()
+            params_manager = TrainingParamsManager()
+            training_params = params_manager.get_latest_training_params()
             learning_rate = training_params.get("learning_rate")
             num_train_epochs = training_params.get("number_of_epochs")
             concurrency_threads = training_params.get("concurrency_threads")
@@ -1342,25 +1183,3 @@ class TrainProcessService:
         except Exception as e:
             logger.error(f"Error stopping training process: {str(e)}")
             return False
-            
-    @classmethod
-    def update_training_params(cls, params):
-        """
-        Update the latest training parameters
-        
-        Args:
-            params: Dictionary containing training parameters
-        """
-        for key, value in params.items():
-            if key in cls._latest_training_params:
-                cls._latest_training_params[key] = value
-                
-    @classmethod
-    def get_latest_training_params(cls):
-        """
-        Get the latest training parameters
-        
-        Returns:
-            dict: Dictionary containing the latest training parameters
-        """
-        return cls._latest_training_params.copy()

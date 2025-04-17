@@ -1,13 +1,10 @@
-import json
-import os
 import time
-from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import Blueprint, jsonify, Response, request
 from charset_normalizer import from_path
 
-from lpm_kernel.file_data.trainprocess_service import TrainProcessService
-from .progress import Status
+from lpm_kernel.train.trainprocess_service import TrainProcessService
+from lpm_kernel.train.training_params_manager import TrainingParamsManager
 from ...common.responses import APIResponse
 from threading import Thread
 
@@ -99,8 +96,9 @@ def start_process():
             "use_cuda": use_cuda  # Make sure to include use_cuda parameter
         }
         
+        params_manager = TrainingParamsManager()
         # Update the latest training parameters
-        TrainProcessService.update_training_params(training_params)
+        params_manager.update_training_params(training_params)
         
         # Log training parameters
         logger.info(f"Saved training parameters: {training_params}")
@@ -172,9 +170,8 @@ def stream_logs():
 def get_progress(model_name):
     """Get current progress (non-real-time)"""
     sanitized_model_name = secure_filename(model_name)  # Sanitize model_name
-    progress_name = f'trainprocess_progress_{sanitized_model_name}.json'  # Build filename based on the sanitized model_name
     try:
-        train_service = TrainProcessService(progress_file=progress_name, current_model_name=sanitized_model_name)  # Pass in specific progress file
+        train_service = TrainProcessService(current_model_name=sanitized_model_name)  # Pass in specific progress file
         progress = train_service.progress.progress
 
         return jsonify(
@@ -288,7 +285,8 @@ def get_training_params():
     """
     try:
         # Get the latest training parameters
-        training_params = TrainProcessService.get_latest_training_params()
+        params_manager = TrainingParamsManager()
+        training_params = params_manager.get_latest_training_params()
         
         return jsonify(APIResponse.success(data=training_params))
     except Exception as e:
