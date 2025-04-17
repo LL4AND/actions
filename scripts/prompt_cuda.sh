@@ -15,21 +15,20 @@ case "$choice" in
     # Create or update .env file with the Dockerfile selection
     if [ -f .env ]; then
       # Update existing file
-      grep -q "DOCKER_BACKEND_DOCKERFILE" .env && \
-        sed -i 's/^DOCKER_BACKEND_DOCKERFILE=.*/DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend.cuda/' .env || \
+      if grep -q "DOCKER_BACKEND_DOCKERFILE" .env; then
+        sed -i 's/^DOCKER_BACKEND_DOCKERFILE=.*/DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend.cuda/' .env
+      else
+        # Add a newline before appending new content
+        echo "" >> .env
         echo "DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend.cuda" >> .env
+      fi
     else
       # Create new file
       echo "DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend.cuda" > .env
     fi
     
-    # Create a new docker-compose override file that explicitly sets the Dockerfile
-    cat > docker-compose.override.yml << EOF
-services:
-  backend:
-    build:
-      dockerfile: Dockerfile.backend.cuda
-EOF
+    # Create a flag file to indicate GPU use
+    echo "GPU" > .gpu_selected
     
     echo "Environment set to build with CUDA support"
     ;;
@@ -39,17 +38,21 @@ EOF
     # Create or update .env file with the Dockerfile selection
     if [ -f .env ]; then
       # Update existing file
-      grep -q "DOCKER_BACKEND_DOCKERFILE" .env && \
-        sed -i 's/^DOCKER_BACKEND_DOCKERFILE=.*/DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend/' .env || \
+      if grep -q "DOCKER_BACKEND_DOCKERFILE" .env; then
+        sed -i 's/^DOCKER_BACKEND_DOCKERFILE=.*/DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend/' .env
+      else
+        # Add a newline before appending new content
+        echo "" >> .env
         echo "DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend" >> .env
+      fi
     else
       # Create new file
       echo "DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend" > .env
     fi
     
-    # Remove any override file if it exists
-    if [ -f docker-compose.override.yml ]; then
-      rm docker-compose.override.yml
+    # Remove any GPU flag file if it exists
+    if [ -f .gpu_selected ]; then
+      rm .gpu_selected
     fi
     
     echo "Environment set to build without CUDA support"

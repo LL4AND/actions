@@ -23,7 +23,8 @@ if exist .env (
         REM Update existing variable
         powershell -Command "(Get-Content .env) -replace '^DOCKER_BACKEND_DOCKERFILE=.*', 'DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend.cuda' | Set-Content .env"
     ) else (
-        REM Append to file
+        REM Append to file with newline before
+        echo.>> .env
         echo DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend.cuda>> .env
     )
 ) else (
@@ -31,11 +32,8 @@ if exist .env (
     echo DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend.cuda> .env
 )
 
-REM Create a new docker-compose override file that explicitly sets the Dockerfile
-echo services:> docker-compose.override.yml
-echo   backend:>> docker-compose.override.yml
-echo     build:>> docker-compose.override.yml
-echo       dockerfile: Dockerfile.backend.cuda>> docker-compose.override.yml
+REM Create a flag file to indicate GPU use
+echo GPU > .gpu_selected
 
 echo Environment set to build with CUDA support
 goto end
@@ -51,7 +49,8 @@ if exist .env (
         REM Update existing variable
         powershell -Command "(Get-Content .env) -replace '^DOCKER_BACKEND_DOCKERFILE=.*', 'DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend' | Set-Content .env"
     ) else (
-        REM Append to file
+        REM Append to file with newline before
+        echo.>> .env
         echo DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend>> .env
     )
 ) else (
@@ -59,9 +58,9 @@ if exist .env (
     echo DOCKER_BACKEND_DOCKERFILE=Dockerfile.backend> .env
 )
 
-REM Remove any override file if it exists
-if exist docker-compose.override.yml (
-    del docker-compose.override.yml
+REM Remove any GPU flag file if it exists
+if exist .gpu_selected (
+    del .gpu_selected
 )
 
 echo Environment set to build without CUDA support

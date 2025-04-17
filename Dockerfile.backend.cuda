@@ -49,14 +49,13 @@ RUN if [ "$SKIP_LLAMA_BUILD" = "false" ]; then \
         cd build && \
         echo "Starting CMake configuration with CUDA support..." && \
         cmake -DGGML_CUDA=ON \
-              -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89" \
               -DCMAKE_BUILD_TYPE=Release \
               -DBUILD_SHARED_LIBS=OFF \
               -DLLAMA_NATIVE=OFF \
               -DCMAKE_CUDA_FLAGS="-Wno-deprecated-gpu-targets" \
               .. && \
         echo "Starting build process (this will take several minutes)..." && \
-        cmake --build . --config Release --verbose && \
+        cmake --build . --config Release -j --verbose && \
         echo "Build completed successfully" && \
         chmod +x /app/llama.cpp/build/bin/llama-server /app/llama.cpp/build/bin/llama-cli && \
         echo "====================================================================" && \

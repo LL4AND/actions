@@ -1,4 +1,4 @@
-.PHONY: install test format lint all setup start stop restart restart-backend restart-force help docker-build docker-up docker-down docker-build-backend docker-build-frontend docker-restart-backend docker-restart-backend-fast docker-restart-backend-smart docker-restart-frontend docker-restart-all docker-check-cuda
+.PHONY: install test format lint all setup start stop restart restart-backend restart-force help docker-build docker-up docker-down docker-build-backend docker-build-frontend docker-restart-backend docker-restart-backend-fast docker-restart-backend-smart docker-restart-frontend docker-restart-all docker-check-cuda docker-use-gpu docker-use-cpu
 
 # Detect operating system and set environment
 ifeq ($(OS),Windows_NT)
@@ -39,6 +39,9 @@ else
     COLOR_RED := \033[1;31m
 endif
 
+# Default Docker Compose configuration (non-GPU)
+DOCKER_COMPOSE_FILE := docker-compose.yml
+
 # Show help message
 help:
 ifeq ($(WINDOWS),1)
@@ -73,6 +76,8 @@ ifeq ($(WINDOWS),1)
 	@echo   make docker-restart-frontend - Restart only frontend container
 	@echo   make docker-restart-all    - Restart all Docker containers
 	@echo   make docker-check-cuda     - Check CUDA support in containers
+	@echo   make docker-use-gpu        - Switch to GPU configuration
+	@echo   make docker-use-cpu        - Switch to CPU-only configuration
 	@echo.
 	@echo All Available Commands:
 	@echo   make help                  - Show this help message
@@ -114,6 +119,8 @@ else
 	@echo "  make docker-restart-frontend - Restart only frontend container"
 	@echo "  make docker-restart-all    - Restart all Docker containers"
 	@echo "  make docker-check-cuda     - Check CUDA support in containers"
+	@echo "  make docker-use-gpu        - Switch to GPU configuration"
+	@echo "  make docker-use-cpu        - Switch to CPU-only configuration"
 	@echo ""
 	@echo "$(COLOR_BOLD)All Available Commands:$(COLOR_RESET)"
 	@echo "  make help                  - Show this help message"
@@ -128,6 +135,27 @@ else
 		echo "  Apple Silicon detected - Docker commands will use PLATFORM=apple"; \
 	fi
 endif
+
+# Configuration switchers for Docker
+docker-use-gpu:
+	@echo "Switching to GPU configuration..."
+	$(eval DOCKER_COMPOSE_FILE := docker-compose-gpu.yml)
+ifeq ($(WINDOWS),1)
+	@echo GPU mode enabled. Docker commands will use docker-compose-gpu.yml
+else
+	@echo "$(COLOR_GREEN)GPU mode enabled. Docker commands will use docker-compose-gpu.yml$(COLOR_RESET)"
+endif
+	$(eval export DOCKER_COMPOSE_FILE)
+
+docker-use-cpu:
+	@echo "Switching to CPU-only configuration..."
+	$(eval DOCKER_COMPOSE_FILE := docker-compose.yml)
+ifeq ($(WINDOWS),1)
+	@echo CPU-only mode enabled. Docker commands will use docker-compose.yml
+else
+	@echo "$(COLOR_GREEN)CPU-only mode enabled. Docker commands will use docker-compose.yml$(COLOR_RESET)"
+endif
+	$(eval export DOCKER_COMPOSE_FILE)
 
 setup:
 	./scripts/setup.sh
@@ -169,73 +197,75 @@ else
 	@chmod +x ./scripts/prompt_cuda.sh
 	@./scripts/prompt_cuda.sh
 endif
-	$(DOCKER_COMPOSE_CMD) build
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build
 
 docker-up:
 	@echo "Building and starting Docker containers..."
 ifeq ($(WINDOWS),1)
 	@echo "Prompting for CUDA preference..."
 	@scripts\prompt_cuda.bat
-	@echo "Current .env configuration:"
-	@if exist .env type .env
-	@echo "Building Docker images with no cache (this will take some time)..."
-	docker compose build --no-cache
-	@echo "Starting Docker containers..."
-	docker compose up -d
+	@echo "Checking CUDA preference..."
+	@cmd /c "if exist .gpu_selected ( echo CUDA support detected, using GPU configuration... & docker compose -f docker-compose-gpu.yml build --no-cache & docker compose -f docker-compose-gpu.yml up -d ) else ( echo No CUDA support selected, using CPU-only configuration... & docker compose -f docker-compose.yml build --no-cache & docker compose -f docker-compose.yml up -d )"
 else
 	@echo "Prompting for CUDA preference..."
 	@chmod +x ./scripts/prompt_cuda.sh
 	@./scripts/prompt_cuda.sh
-	@if [ -f .env ]; then cat .env; fi
-	@env | grep DOCKER_BACKEND_DOCKERFILE || true
-	$(DOCKER_COMPOSE_CMD) build --no-cache
-	$(DOCKER_COMPOSE_CMD) up -d
+	@echo "Checking CUDA preference..."
+	@if [ -f .gpu_selected ]; then \
+		echo "CUDA support detected, using GPU configuration..."; \
+		$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml build --no-cache; \
+		$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml up -d; \
+	else \
+		echo "No CUDA support selected, using CPU-only configuration..."; \
+		$(DOCKER_COMPOSE_CMD) -f docker-compose.yml build --no-cache; \
+		$(DOCKER_COMPOSE_CMD) -f docker-compose.yml up -d; \
+	fi
 endif
 	@echo "Container startup complete"
 	@echo "Check CUDA support with: make docker-check-cuda"
 
 docker-down:
-	$(DOCKER_COMPOSE_CMD) down
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) down
 
 docker-build-backend:
-	$(DOCKER_COMPOSE_CMD) build backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build backend
 
 docker-build-frontend:
-	$(DOCKER_COMPOSE_CMD) build frontend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build frontend
 
 # Standard backend restart with complete rebuild
 docker-restart-backend:
-	$(DOCKER_COMPOSE_CMD) stop backend
-	$(DOCKER_COMPOSE_CMD) rm -f backend
-	$(DOCKER_COMPOSE_CMD) build backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
-	$(DOCKER_COMPOSE_CMD) up -d backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) stop backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) rm -f backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) up -d backend
 
 
 # Fast backend restart: preserves llama.cpp build but includes code changes
 docker-restart-backend-fast:
 	@echo "Smart restarting backend container (preserving llama.cpp build)..."
 	@echo "Stopping backend container..."
-	$(DOCKER_COMPOSE_CMD) stop backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) stop backend
 	@echo "Removing backend container..."
-	$(DOCKER_COMPOSE_CMD) rm -f backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) rm -f backend
 	@echo "Building backend image with build-arg to skip llama.cpp build..."
-	$(DOCKER_COMPOSE_CMD) build --build-arg SKIP_LLAMA_BUILD=true backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build --build-arg SKIP_LLAMA_BUILD=true backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
 	@echo "Starting backend container..."
-	$(DOCKER_COMPOSE_CMD) up -d backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) up -d backend
 	@echo "Backend container smart-restarted successfully"
 	@echo "Check CUDA support with: make docker-check-cuda"
 
 docker-restart-frontend:
-	$(DOCKER_COMPOSE_CMD) stop frontend
-	$(DOCKER_COMPOSE_CMD) rm -f frontend
-	$(DOCKER_COMPOSE_CMD) build frontend || { echo "$(COLOR_RED)❌ Frontend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
-	$(DOCKER_COMPOSE_CMD) up -d frontend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) stop frontend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) rm -f frontend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build frontend || { echo "$(COLOR_RED)❌ Frontend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) up -d frontend
 
 docker-restart-all:
-	$(DOCKER_COMPOSE_CMD) stop
-	$(DOCKER_COMPOSE_CMD) rm -f
-	$(DOCKER_COMPOSE_CMD) build || { echo "$(COLOR_RED)❌ Build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
-	$(DOCKER_COMPOSE_CMD) up -d
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) stop
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) rm -f
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build || { echo "$(COLOR_RED)❌ Build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) up -d
 
 # New command to check CUDA support in containers
 docker-check-cuda:
