@@ -82,6 +82,7 @@ export default function TrainingPage() {
   const cleanupEventSourceRef = useRef<(() => void) | undefined>();
 
   const [changeBaseModel, setChangeBaseModel] = useState(false);
+  const [cudaAvailable, setCudaAvailable] = useState<boolean>(false);
 
   useEffect(() => {
     const localTrainingParams = JSON.parse(localStorage.getItem('trainingParams') || '{}');
@@ -99,6 +100,29 @@ export default function TrainingPage() {
         message.error(res.data.message);
       }
     });
+  }, []);
+
+  useEffect(() => {
+    // Check CUDA availability once on load
+    checkCudaAvailability()
+      .then(res => {
+        if (res.data.code === 0) {
+          const { cuda_available, cuda_info } = res.data.data;
+          setCudaAvailable(cuda_available);
+          
+          if (cuda_available) {
+            console.log('CUDA is available:', cuda_info);
+          } else {
+            console.log('CUDA is not available on this system');
+          }
+        } else {
+          message.error(res.data.message || 'Failed to check CUDA availability');
+        }
+      })
+      .catch(err => {
+        console.error('CUDA availability check failed', err);
+        message.error('CUDA availability check failed');
+      });
   }, []);
 
   const pollingStopRef = useRef<boolean>(false);
@@ -554,6 +578,7 @@ export default function TrainingPage() {
           trainActionLoading={trainActionLoading}
           trainingParams={trainingParams}
           updateTrainingParams={updateTrainingParams}
+          cudaAvailable={cudaAvailable}
         />
 
         {/* Only show training progress after training starts */}
