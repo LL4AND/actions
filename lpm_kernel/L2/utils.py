@@ -676,11 +676,8 @@ def save_hf_model(model_name="Qwen2.5-0.5B-Instruct", log_file_path=None) -> str
         # Get list of files to download
         files = list_repo_files(hf_model_name)
         logger.info(f"Found {len(files)} files to download from {hf_model_name}")
-        
-        # Keep track of failed files for potential retry
-        failed_files = []
-        
-        def download_file(filename):
+
+        def download_file_with_progress(filename):
             """Download a single file from the model repository"""
             local_file_path = os.path.join(save_path, filename)
             
@@ -693,20 +690,76 @@ def save_hf_model(model_name="Qwen2.5-0.5B-Instruct", log_file_path=None) -> str
                 return True
             
             try:
-                # Use the huggingface_hub's built-in download function which handles retries and progress
-                hf_hub_download(
-                    repo_id=hf_model_name,
-                    filename=filename,
-                    local_dir=save_path,
-                    local_dir_use_symlinks=False,
-                    resume_download=True
-                )
-                logger.info(f"Successfully downloaded: {filename}")
-                return True
+                # Build the download URL
+                url = f"https://huggingface.co/{hf_model_name}/resolve/main/{filename}"
+                
+                # Get file size
+                response = requests.head(url)
+                total_size = int(response.headers.get('content-length', 0))
+                
+                # If the size cannot be obtained, set a default value
+                if total_size == 0:
+                    logger.info(f"Starting download of file: {filename} (Size unknown)")
+                else:
+                    logger.info(f"Starting download of file: {filename} (Size: {total_size / 1024 / 1024:.2f} MB)")
+                
+                # Create the file to write to
+                with open(local_file_path, 'wb') as f:
+                    # Create a progress bar
+                    progress_bar = tqdm(
+                        total=total_size if total_size > 0 else None,
+                        unit='iB',
+                        unit_scale=True,
+                        desc=f"Downloading {os.path.basename(filename)}",
+                        disable=False
+                    )
+                    
+                    # Define progress callback
+                    def progress_callback(current, total):
+                        progress_bar.update(current - progress_bar.n)
+                        
+                        # Log progress every ~1MB
+                        if current % (1024 * 1024) < 8192:
+                            if total and total > 0:
+                                percent = current / total * 100
+                                logger.info(f"File {filename}: Downloaded {current/1024/1024:.2f} MB / {total/1024/1024:.2f} MB ({percent:.2f}%)")
+                            else:
+                                logger.info(f"File {filename}: Downloaded {current/1024/1024:.2f} MB (total size unknown)")
+                
+                    # Download file with progress tracking
+                    response = requests.get(url, stream=True)
+                    if response.status_code == 200:
+                        downloaded = 0
+                        
+                        # Update total size if needed
+                        actual_total = int(response.headers.get('content-length', 0))
+                        if actual_total > 0 and (total_size == 0 or total_size != actual_total):
+                            total_size = actual_total
+                            logger.info(f"Updated file size for {filename}: {total_size / 1024 / 1024:.2f} MB")
+                            progress_bar.total = total_size
+                            progress_bar.refresh()
+                        
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                progress_callback(downloaded, total_size)
+                                
+                        progress_bar.close()
+                        logger.info(f"Completed download of file: {filename}")
+                        return True
+                    else:
+                        logger.error(f"Failed to download {filename}: HTTP status {response.status_code}")
+                        failed_files.append(filename)
+                        return False
+                        
             except Exception as e:
                 logger.error(f"Failed to download {filename}: {str(e)}")
                 failed_files.append(filename)
                 return False
+
+        # Keep track of failed files for potential retry
+        failed_files = []
         
         # Use ThreadPoolExecutor for parallel downloads with controlled concurrency
         max_workers = min(8, len(files))  # Limit concurrent downloads to avoid overloading
@@ -715,7 +768,7 @@ def save_hf_model(model_name="Qwen2.5-0.5B-Instruct", log_file_path=None) -> str
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Create a progress bar for overall download progress
             with tqdm(total=len(files), desc="Downloading model files") as progress:
-                futures = [executor.submit(download_file, file) for file in files]
+                futures = [executor.submit(download_file_with_progress, file) for file in files]
                 
                 for future in futures:
                     result = future.result()
@@ -765,7 +818,7 @@ def save_hf_model(model_name="Qwen2.5-0.5B-Instruct", log_file_path=None) -> str
         logger.error(f"Error downloading model: {str(e)}")
         logger.error(traceback.format_exc())
         raise
-
+    return save_path
 
 def format_timestr(utc_time_str):
     """Formats a UTC time string to a more readable format.
