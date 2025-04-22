@@ -37,33 +37,46 @@ def init_chroma_db():
         collections_to_init = ["documents", "document_chunks"]
         dimension_mismatch_detected = False
         
-        # collection: init documents level
-        try:
-            documents_collection = client.get_collection(name="documents")
-            print(f"Collection 'documents' already exists")
-        except ValueError:
-            documents_collection = client.create_collection(
-                name="documents",
-                metadata={
-                    "hnsw:space": "cosine",
-                    "dimension": 1536
-                }
-            )
-            print(f"Successfully created collection 'documents'")
-            
-        # collection: init chunk level
-        try:
-            chunks_collection = client.get_collection(name="document_chunks")
-            print(f"Collection 'document_chunks' already exists")
-        except ValueError:
-            chunks_collection = client.create_collection(
-                name="document_chunks",
-                metadata={
-                    "hnsw:space": "cosine",
-                    "dimension": 1536
-                }
-            )
-            print(f"Successfully created collection 'document_chunks'")
+        # Check all collections for dimension mismatches first
+        for collection_name in collections_to_init:
+            try:
+                collection = client.get_collection(name=collection_name)
+                print(f"Collection '{collection_name}' already exists")
+                
+                # Check if existing collection has the correct dimension
+                if collection.metadata.get("dimension") != dimension:
+                    print(f"Warning: Existing '{collection_name}' collection has dimension {collection.metadata.get('dimension')}, but current model requires {dimension}")
+                    dimension_mismatch_detected = True
+            except ValueError:
+                # Collection doesn't exist yet, will be created later
+                pass
+        
+        # Handle dimension mismatch if detected in any collection
+        if dimension_mismatch_detected:
+            print("Automatically reinitializing ChromaDB collections with the new dimension...")
+            if reinitialize_chroma_collections(dimension):
+                print("Successfully reinitialized ChromaDB collections with the new dimension")
+            else:
+                print("Failed to reinitialize ChromaDB collections, you may need to manually delete the data/chroma_db directory")
+        
+        # Create or get collections with the correct dimension
+        for collection_name in collections_to_init:
+            try:
+                collection = client.get_collection(name=collection_name)
+                # Verify dimension after possible reinitialization
+                if collection.metadata.get("dimension") != dimension:
+                    print(f"Error: Collection '{collection_name}' still has incorrect dimension after reinitialization: {collection.metadata.get('dimension')} vs {dimension}")
+            except ValueError:
+                # Create collection if it doesn't exist
+                collection = client.create_collection(
+                    name=collection_name,
+                    metadata={
+                        "hnsw:space": "cosine",
+                        "dimension": dimension
+                    }
+                )
+                print(f"Successfully created collection '{collection_name}' with dimension {dimension}")
+
         
         print(f"ChromaDB initialized at {chroma_path}")
     except Exception as e:

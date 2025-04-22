@@ -90,10 +90,10 @@ class EmbeddingService:
                 self.chunk_collection = self.client.create_collection(
                     name="document_chunks", metadata={"hnsw:space": "cosine", "dimension": self.dimension}
                 )
+                logger.info(f"Created 'document_chunks' collection with dimension {self.dimension}")
             except Exception as e:
                 logger.error(f"Failed to create 'document_chunks' collection: {str(e)}", exc_info=True)
                 raise RuntimeError(f"Failed to create 'document_chunks' collection: {str(e)}")
-            logger.info(f"Created 'document_chunks' collection with dimension {self.dimension}")
 
     def generate_document_embedding(self, document: DocumentDTO) -> List[float]:
         """Process document level embedding and store in ChromaDB"""
