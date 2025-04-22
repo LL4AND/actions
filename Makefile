@@ -245,13 +245,14 @@ docker-restart-backend:
 docker-restart-backend-fast:
 	@echo "Smart restarting backend container (preserving llama.cpp build)..."
 	@echo "Stopping backend container..."
-	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) stop backend
+	$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml stop backend
 	@echo "Removing backend container..."
-	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) rm -f backend
+	$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml rm -f backend
 	@echo "Building backend image with build-arg to skip llama.cpp build..."
-	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build --build-arg SKIP_LLAMA_BUILD=true backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
+	@echo "Using CUDA Dockerfile by default for faster rebuild..."
+	$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml build --build-arg SKIP_LLAMA_BUILD=true backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
 	@echo "Starting backend container..."
-	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) up -d backend
+	$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml up -d backend
 	@echo "Backend container smart-restarted successfully"
 	@echo "Check CUDA support with: make docker-check-cuda"
 
