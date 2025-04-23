@@ -1,5 +1,14 @@
 .PHONY: install test format lint all setup start stop restart restart-backend restart-force help docker-build docker-up docker-down docker-build-backend docker-build-frontend docker-restart-backend docker-restart-backend-fast docker-restart-backend-smart docker-restart-frontend docker-restart-all docker-check-cuda docker-use-gpu docker-use-cpu
 
+# Check for GPU flag file and set Docker Compose file accordingly
+ifeq ($(wildcard .gpu_selected),)
+    # No GPU flag file found, use CPU configuration
+    DOCKER_COMPOSE_FILE := docker-compose.yml
+else
+    # GPU flag file found, use GPU configuration
+    DOCKER_COMPOSE_FILE := docker-compose-gpu.yml
+endif
+
 # Detect operating system and set environment
 ifeq ($(OS),Windows_NT)
     # Set Windows variables
@@ -138,23 +147,23 @@ endif
 # Configuration switchers for Docker
 docker-use-gpu:
 	@echo "Switching to GPU configuration..."
-	$(eval DOCKER_COMPOSE_FILE := docker-compose-gpu.yml)
 ifeq ($(WINDOWS),1)
 	@echo GPU mode enabled. Docker commands will use docker-compose-gpu.yml
+	@echo gpu > .gpu_selected
 else
 	@echo "$(COLOR_GREEN)GPU mode enabled. Docker commands will use docker-compose-gpu.yml$(COLOR_RESET)"
+	@echo "gpu" > .gpu_selected
 endif
-	$(eval export DOCKER_COMPOSE_FILE)
 
 docker-use-cpu:
 	@echo "Switching to CPU-only configuration..."
-	$(eval DOCKER_COMPOSE_FILE := docker-compose.yml)
 ifeq ($(WINDOWS),1)
 	@echo CPU-only mode enabled. Docker commands will use docker-compose.yml
+	@rm -f .gpu_selected
 else
 	@echo "$(COLOR_GREEN)CPU-only mode enabled. Docker commands will use docker-compose.yml$(COLOR_RESET)"
+	@rm -f .gpu_selected
 endif
-	$(eval export DOCKER_COMPOSE_FILE)
 
 setup:
 	./scripts/setup.sh
@@ -240,18 +249,22 @@ docker-restart-backend:
 	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) up -d backend
 
 
-# Fast backend restart: preserves llama.cpp build but includes code changes
+# Fast backend restart: preserves llama.cpp build
 docker-restart-backend-fast:
 	@echo "Smart restarting backend container (preserving llama.cpp build)..."
 	@echo "Stopping backend container..."
-	$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml stop backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) stop backend
 	@echo "Removing backend container..."
-	$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml rm -f backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) rm -f backend
 	@echo "Building backend image with build-arg to skip llama.cpp build..."
-	@echo "Using CUDA Dockerfile by default for faster rebuild..."
-	$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml build --build-arg SKIP_LLAMA_BUILD=true backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
+ifeq ($(wildcard .gpu_selected),)
+	@echo "Using CPU configuration (docker-compose.yml)..."
+else
+	@echo "Using GPU configuration (docker-compose-gpu.yml)..."
+endif
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) build --build-arg SKIP_LLAMA_BUILD=true backend || { echo "$(COLOR_RED)❌ Backend build failed! Aborting operation...$(COLOR_RESET)"; exit 1; }
 	@echo "Starting backend container..."
-	$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml up -d backend
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_COMPOSE_FILE) up -d backend
 	@echo "Backend container smart-restarted successfully"
 	@echo "Check CUDA support with: make docker-check-cuda"
 
