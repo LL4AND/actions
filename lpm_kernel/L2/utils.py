@@ -305,15 +305,11 @@ def create_and_prepare_model(args, data_args, training_args, model_kwargs=None):
     cuda_available = torch.cuda.is_available()
     use_cuda_requested = args.use_cuda
     device = "cpu"
-    
+
+    # Always enable memory-adaptive loading by default (device_map="auto"), unless CUDA is off
     if cuda_available and use_cuda_requested:
         device = "cuda"
-        logger.info(f"✅ CUDA is available and enabled for training. GPU: {torch.cuda.get_device_name(0)}")
-        logger.info(f"CUDA memory allocated: {torch.cuda.memory_allocated(0) / 1024**3:.2f}GB")
-        logger.info(f"CUDA memory reserved: {torch.cuda.memory_reserved(0) / 1024**3:.2f}GB")
-        # Set device_map to auto by default for CUDA devices
-        if "device_map" not in model_kwargs:
-            model_kwargs["device_map"] = "auto"
+        model_kwargs["device_map"] = "auto"
     else:
         if use_cuda_requested and not cuda_available:
             logger.warning("⚠️ CUDA was requested but is not available on this system. Falling back to CPU.")
@@ -321,7 +317,7 @@ def create_and_prepare_model(args, data_args, training_args, model_kwargs=None):
             logger.info("ℹ️ CUDA is available but not requested. Using CPU as specified.")
         else:
             logger.info("ℹ️ CUDA is not available. Using CPU for training.")
-            
+        # Explicitly remove device_map to force CPU-only
         if "device_map" in model_kwargs:
             model_kwargs.pop("device_map")
         logger.info("Using CPU for model training and inference.")
@@ -387,11 +383,7 @@ def create_and_prepare_model(args, data_args, training_args, model_kwargs=None):
             # Set default device_map if not specified
             if "device_map" not in load_kwargs and args.use_cuda and torch.cuda.is_available():
                 load_kwargs["device_map"] = "auto"
-            
-            # Set dtype if not specified
-            if "torch_dtype" not in load_kwargs and torch.cuda.is_available() and args.use_cuda:
-                load_kwargs["torch_dtype"] = torch.bfloat16
-            
+                            
             logger.info(f"Loading model with parameters: {load_kwargs}")
             model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path, **load_kwargs)
     

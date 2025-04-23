@@ -239,15 +239,6 @@ def main(model_args, data_args, training_args):
         "trust_remote_code": True
     }
     
-    # Configure precision based on hardware capabilities
-    if torch.cuda.is_available() and model_args.use_cuda:
-        if torch.cuda.get_device_capability()[0] >= 8:  # Ampere or newer (supports BF16)
-            model_kwargs["torch_dtype"] = torch.bfloat16
-            logger.info("Using bfloat16 precision for memory efficiency")
-        elif torch.cuda.get_device_capability()[0] >= 7:  # Volta or newer (supports FP16)
-            model_kwargs["torch_dtype"] = torch.float16
-            logger.info("Using float16 precision for memory efficiency")
-    
     # Configure quantization if requested
     if model_args.use_4bit_quantization:
         from transformers import BitsAndBytesConfig
