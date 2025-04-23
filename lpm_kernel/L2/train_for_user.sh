@@ -20,8 +20,12 @@ while [[ "$#" -gt 0 ]]; do
             cuda_value=$(echo "$2" | tr '[:upper:]' '[:lower:]')
             if [[ "$cuda_value" == "true" ]]; then
                 USE_CUDA=True
+                # Set CUDA environment variables to ensure PyTorch detects GPU
+                export CUDA_VISIBLE_DEVICES=0
             else
                 USE_CUDA=False
+                # Disable CUDA explicitly
+                export CUDA_VISIBLE_DEVICES=""
             fi
             shift ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;

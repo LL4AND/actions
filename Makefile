@@ -72,7 +72,7 @@ ifeq ($(WINDOWS),1)
 	@echo   make docker-build-backend  - Build only backend Docker image
 	@echo   make docker-build-frontend - Build only frontend Docker image
 	@echo   make docker-restart-backend - Restart only backend container
-	@echo   make docker-restart-backend-fast - Restart backend without rebuilding llama.cpp
+	@echo   make docker-restart-backend-fast - Restart backend+cuda without rebuilding llama.cpp
 	@echo   make docker-restart-frontend - Restart only frontend container
 	@echo   make docker-restart-all    - Restart all Docker containers
 	@echo   make docker-check-cuda     - Check CUDA support in containers
@@ -114,8 +114,7 @@ else
 	@echo "  make docker-build-backend  - Build only backend Docker image"
 	@echo "  make docker-build-frontend - Build only frontend Docker image"
 	@echo "  make docker-restart-backend - Restart only backend container (with rebuild)"
-	@echo "  make docker-restart-backend-fast - Restart backend without rebuilding (faster)"
-	@echo "  make docker-restart-backend-smart - Restart backend preserving llama.cpp build"
+	@echo "  make docker-restart-backend-fast - Restart backend+cuda without rebuilding llama.cpp"
 	@echo "  make docker-restart-frontend - Restart only frontend container"
 	@echo "  make docker-restart-all    - Restart all Docker containers"
 	@echo "  make docker-check-cuda     - Check CUDA support in containers"
@@ -213,11 +212,11 @@ else
 	@echo "Checking CUDA preference..."
 	@if [ -f .gpu_selected ]; then \
 		echo "CUDA support detected, using GPU configuration..."; \
-		$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml build --no-cache; \
+		$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml build; \
 		$(DOCKER_COMPOSE_CMD) -f docker-compose-gpu.yml up -d; \
 	else \
 		echo "No CUDA support selected, using CPU-only configuration..."; \
-		$(DOCKER_COMPOSE_CMD) -f docker-compose.yml build --no-cache; \
+		$(DOCKER_COMPOSE_CMD) -f docker-compose.yml build; \
 		$(DOCKER_COMPOSE_CMD) -f docker-compose.yml up -d; \
 	fi
 endif

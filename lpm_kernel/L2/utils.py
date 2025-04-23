@@ -308,7 +308,7 @@ def create_and_prepare_model(args, data_args, training_args, model_kwargs=None):
     
     if cuda_available and use_cuda_requested:
         device = "cuda"
-        logger.info(f"CUDA is available. Using device: {torch.cuda.get_device_name(0)}")
+        logger.info(f"✅ CUDA is available and enabled for training. GPU: {torch.cuda.get_device_name(0)}")
         logger.info(f"CUDA memory allocated: {torch.cuda.memory_allocated(0) / 1024**3:.2f}GB")
         logger.info(f"CUDA memory reserved: {torch.cuda.memory_reserved(0) / 1024**3:.2f}GB")
         # Set device_map to auto by default for CUDA devices
@@ -316,7 +316,12 @@ def create_and_prepare_model(args, data_args, training_args, model_kwargs=None):
             model_kwargs["device_map"] = "auto"
     else:
         if use_cuda_requested and not cuda_available:
-            logger.warning("CUDA was requested but is not available. Falling back to CPU.")
+            logger.warning("⚠️ CUDA was requested but is not available on this system. Falling back to CPU.")
+        elif cuda_available and not use_cuda_requested:
+            logger.info("ℹ️ CUDA is available but not requested. Using CPU as specified.")
+        else:
+            logger.info("ℹ️ CUDA is not available. Using CPU for training.")
+            
         if "device_map" in model_kwargs:
             model_kwargs.pop("device_map")
         logger.info("Using CPU for model training and inference.")
