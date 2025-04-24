@@ -30,6 +30,7 @@ from lpm_kernel.api.domains.trainprocess.train_progress import TrainProgress
 from lpm_kernel.api.domains.trainprocess.process_step import ProcessStep
 from lpm_kernel.api.domains.trainprocess.progress_holder import TrainProgressHolder
 from lpm_kernel.train.training_params_manager import TrainingParamsManager
+from lpm_kernel.backup.auto_backup import AutoBackupManager
 import gc
 import subprocess
 import shlex
@@ -1040,6 +1041,16 @@ class TrainProcessService:
             # Store the current process PID
             self.current_pid = os.getpid()  # Store the PID
             logger.info(f"Training process started with PID: {self.current_pid}")
+            
+            # Create pre-training backup
+            logger.info("Creating pre-training backup")
+            auto_backup_manager = AutoBackupManager()
+            auto_backup_manager.create_pre_training_backup(model_name=self.model_name)
+            
+            # Start periodic backup
+            logger.info("Starting periodic backup")
+            auto_backup_manager.start_periodic_backup(model_name=self.model_name)
+            
             # Get the ordered list of all steps
             ordered_steps = ProcessStep.get_ordered_steps()
 
@@ -1112,6 +1123,11 @@ class TrainProcessService:
             # mark train stop
             if self.current_step == ProcessStep.TRAIN:
                 self.progress.mark_step_status(ProcessStep.TRAIN, Status.SUSPENDED)
+            
+            # Stop periodic backup when training is manually stopped
+            logger.info("Stopping periodic backup due to manual stop")
+            auto_backup_manager = AutoBackupManager()
+            auto_backup_manager.stop_periodic_backup()
             
             # First check if we have the current process PID
             if not hasattr(self, 'current_pid') or not self.current_pid:
