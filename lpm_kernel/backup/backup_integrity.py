@@ -26,21 +26,37 @@ class BackupIntegrity:
             compressed_path = file_path.with_suffix('.gz')
         
         try:
-            # 使用分块读取以处理大文件
+            from concurrent.futures import ThreadPoolExecutor
+            import threading
+            
             chunk_size = 1024 * 1024  # 1MB chunks
-            compressor = zlib.compressobj(level=compression_level)
-            with open(file_path, 'rb') as f_in, open(compressed_path, 'wb') as f_out:
+            file_lock = threading.Lock()
+            
+            def _compress_chunk(chunk):
+                compressor = zlib.compressobj(level=compression_level)
+                return compressor.compress(chunk) + compressor.flush(zlib.Z_FULL_FLUSH)
+            
+            with open(file_path, 'rb') as f_in, \
+                 open(compressed_path, 'wb') as f_out, \
+                 ThreadPoolExecutor() as executor:
+                
+                futures = []
                 while True:
                     chunk = f_in.read(chunk_size)
                     if not chunk:
                         break
-                    compressed_chunk = compressor.compress(chunk)
-                    if compressed_chunk:
-                        f_out.write(compressed_chunk)
-                # 确保写入所有剩余的压缩数据
-                f_out.write(compressor.flush())
+                    futures.append(executor.submit(_compress_chunk, chunk))
+                
+                # 按顺序收集结果
+                for future in futures:
+                    compressed_data = future.result()
+                    with file_lock:
+                        f_out.write(compressed_data)
+                
+                # 写入最终flush
+                final_flush = zlib.compressobj(level=compression_level).flush()
+                f_out.write(final_flush)
             
-            # 计算压缩比
             original_size = file_path.stat().st_size
             compressed_size = compressed_path.stat().st_size
             compression_ratio = (1 - compressed_size / original_size) * 100
