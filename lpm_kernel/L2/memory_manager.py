@@ -22,10 +22,7 @@ class MemoryManager:
         self.cuda_available = torch.cuda.is_available()
         self.process = psutil.Process(os.getpid())
         
-        # Configure PyTorch memory allocator for better fragmentation handling
-        if self.cuda_available:
-            # Set environment variables to optimize memory allocation
-            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
+        # Remove redundant environment variable setting - now handled in train_for_user.sh
     
     def get_memory_info(self) -> Dict[str, Any]:
         """Get current memory usage information."""

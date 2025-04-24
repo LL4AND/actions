@@ -92,7 +92,7 @@ def start_process():
             "number_of_epochs": number_of_epochs,
             "concurrency_threads": concurrency_threads,
             "data_synthesis_mode": data_synthesis_mode,
-            "use_cuda": use_cuda  # Make sure to include use_cuda parameter
+            "use_cuda": use_cuda,  # Make sure to include use_cuda parameter
             "is_cot": is_cot
         }
         
@@ -116,7 +116,7 @@ def start_process():
                     "number_of_epochs": number_of_epochs,
                     "concurrency_threads": concurrency_threads,
                     "data_synthesis_mode": data_synthesis_mode,
-                    "use_cuda": use_cuda  # Include in response
+                    "use_cuda": use_cuda,  # Include in response
                     "is_cot": is_cot
                 }
             )

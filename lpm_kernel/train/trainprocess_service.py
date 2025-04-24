@@ -43,16 +43,6 @@ class TrainProcessService:
     _instance = None
     _initialized = False
     
-    # Static variable to store the latest training parameters
-    _latest_training_params = {
-        "model_name": "Qwen2.5-0.5B-Instruct",
-        "learning_rate": 1e-4,
-        "number_of_epochs": 3,
-        "concurrency_threads": 2,
-        "data_synthesis_mode": "low",
-        "use_cuda": False  # Added CUDA support flag
-    }
-
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -644,9 +634,6 @@ class TrainProcessService:
             concurrency_threads = training_params.get("concurrency_threads")
             data_synthesis_mode = training_params.get("data_synthesis_mode")
             use_cuda = training_params.get("use_cuda", False)
-            
-            # Convert use_cuda to string "True" or "False" for the shell script
-            use_cuda_str = "True" if use_cuda else "False"
             is_cot = training_params.get("is_cot", False)
             
             # Log training parameters
@@ -655,7 +642,8 @@ class TrainProcessService:
             logger.info(f"  Number of epochs: {num_train_epochs}")
             logger.info(f"  Concurrency threads: {concurrency_threads}")
             logger.info(f"  Data synthesis mode: {data_synthesis_mode}")
-            logger.info(f"  Use CUDA: {use_cuda}")  # Log the actual boolean value
+            logger.info(f"  Use CUDA: {use_cuda}")
+            logger.info(f"  Is CoT: {is_cot}")
             
             # Prepare arguments for the script
             # Build command line arguments, need to include script path as the first parameter
@@ -665,7 +653,7 @@ class TrainProcessService:
                 "--epochs", str(num_train_epochs),
                 "--threads", str(concurrency_threads),
                 "--mode", str(data_synthesis_mode),
-                "--cuda", use_cuda_str  # Add CUDA flag here
+                "--cuda", str(use_cuda),
                 "--is_cot", str(is_cot)
             ]
             

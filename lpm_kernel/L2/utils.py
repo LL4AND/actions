@@ -621,11 +621,11 @@ def setup_logger(log_path, logger_name="download_logger"):
     return logger
 
 
-def save_hf_model(model_name="Qwen2.5-0.5B-Instruct", log_file_path=None) -> str:
+def save_hf_model(model_name=None, log_file_path=None) -> str:
     """Saves a Hugging Face model locally.
     
     Args:
-        model_name: Name of the model to save. Defaults to "Qwen2.5-0.5B-Instruct".
+        model_name: Name of the model to save. If None, will attempt to get from config.
         log_file_path: Path to save download logs. If None, uses default path.
         
     Returns:
@@ -637,6 +637,19 @@ def save_hf_model(model_name="Qwen2.5-0.5B-Instruct", log_file_path=None) -> str
     
     # Setup logging
     logger = setup_logger(log_file_path)
+    
+    # If no model name provided, attempt to get from training configuration
+    if not model_name:
+        try:
+            from lpm_kernel.configs.config import Config
+            config = Config()
+            model_name = config.get("training", {}).get("model_name")
+            if not model_name:
+                logger.warning("No model name provided and none found in config. Using Qwen2.5-0.5B-Instruct as fallback.")
+                model_name = "Qwen2.5-0.5B-Instruct"
+        except Exception as e:
+            logger.warning(f"Failed to get model name from config: {str(e)}. Using Qwen2.5-0.5B-Instruct as fallback.")
+            model_name = "Qwen2.5-0.5B-Instruct"
     
     base_dir = os.path.join(os.getcwd(), "resources/L2/base_models")
     # Normalize model name and check for path traversal attempts
