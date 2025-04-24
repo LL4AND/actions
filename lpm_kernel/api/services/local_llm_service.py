@@ -4,6 +4,8 @@ import logging
 import psutil
 import time
 import subprocess
+import threading
+import queue
 from typing import Iterator, Any, Optional, Generator, Dict
 from datetime import datetime
 from flask import Response
@@ -244,48 +246,181 @@ class LocalLLMService:
 
     def handle_stream_response(self, response_iter: Iterator[Any]) -> Response:
         """Handle streaming response from the LLM server"""
-        def generate():
-            chunk = None  # Initialize chunk variable
+        # Create a queue for thread communication
+        message_queue = queue.Queue()
+        # Create an event flag to notify when model processing is complete
+        completion_event = threading.Event()
+        # Create a variable to track if heartbeat is needed after first response
+        first_response_received = False
+        
+        def heartbeat_thread():
+            """Thread function for sending heartbeats"""
+            start_time = time.time()
+            heartbeat_interval = 10  # Send heartbeat every 10 seconds
+            heartbeat_count = 0
+            
+            logger.info("[STREAM_DEBUG] Heartbeat thread started")
+            
             try:
+                # Send initial heartbeat
+                message_queue.put((b": initial heartbeat\n\n", "[INITIAL_HEARTBEAT]"))
+                last_heartbeat_time = time.time()
+                
+                while not completion_event.is_set():
+                    current_time = time.time()
+                    
+                    # Check if we need to send a heartbeat
+                    if current_time - last_heartbeat_time >= heartbeat_interval:
+                        heartbeat_count += 1
+                        elapsed = current_time - start_time
+                        logger.info(f"[STREAM_DEBUG] Sending heartbeat #{heartbeat_count} at {elapsed:.2f}s")
+                        message_queue.put((f": heartbeat #{heartbeat_count}\n\n".encode('utf-8'), "[HEARTBEAT]"))
+                        last_heartbeat_time = current_time
+                    
+                    # Short sleep to prevent CPU spinning
+                    time.sleep(0.1)
+                
+                logger.info(f"[STREAM_DEBUG] Heartbeat thread stopping after {heartbeat_count} heartbeats")
+            except Exception as e:
+                logger.error(f"[STREAM_DEBUG] Error in heartbeat thread: {str(e)}", exc_info=True)
+                message_queue.put((f"data: {{\"error\": \"Heartbeat error: {str(e)}\"}}\n\n".encode('utf-8'), "[ERROR]"))
+        
+        def model_response_thread():
+            """Thread function for processing model responses"""
+            chunk = None
+            start_time = time.time()
+            chunk_count = 0
+            
+            try:
+                logger.info("[STREAM_DEBUG] Model response thread started")
+                
+                # Process model responses
                 for chunk in response_iter:
+                    current_time = time.time()
+                    elapsed_time = current_time - start_time
+                    chunk_count += 1
+                    
+                    logger.info(f"[STREAM_DEBUG] Received chunk #{chunk_count} after {elapsed_time:.2f}s")
+                    
                     if chunk is None:
-                        logger.warning("Received None chunk in stream, skipping")
+                        logger.warning("[STREAM_DEBUG] Received None chunk, skipping")
                         continue
-                        
-                    # logger.info(f"Received raw chunk: {chunk}")
-                    # Check if this is the done marker for custom format
+                    
+                    # Check if it's an end marker
                     if chunk == "[DONE]":
-                        logger.info("Received [DONE] marker")
-                        yield b"data: [DONE]\n\n"
-                        return  # Use return instead of break to ensure [DONE] in finally won't be executed
+                        logger.info(f"[STREAM_DEBUG] Received [DONE] marker after {elapsed_time:.2f}s")
+                        message_queue.put((b"data: [DONE]\n\n", "[DONE]"))
+                        break
                     
-                    # Handle OpenAI error format directly
+                    # Handle error responses
                     if isinstance(chunk, dict) and "error" in chunk:
-                        logger.warning(f"Received error response: {chunk}")
+                        logger.warning(f"[STREAM_DEBUG] Received error response: {chunk}")
                         data_str = json.dumps(chunk)
-                        yield f"data: {data_str}\n\n".encode('utf-8')
-                        # After sending error, send [DONE] marker to close the stream properly
-                        yield b"data: [DONE]\n\n"
-                        return
+                        message_queue.put((f"data: {data_str}\n\n".encode('utf-8'), "[ERROR]"))
+                        message_queue.put((b"data: [DONE]\n\n", "[DONE]"))
+                        break
                     
+                    # Handle normal responses
                     response_data = self._parse_response_chunk(chunk)
                     if response_data:
                         data_str = json.dumps(response_data)
-                        # logger.info(f"Sending response data: {data_str}")
-                        yield f"data: {data_str}\n\n".encode('utf-8')
+                        content = response_data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                        content_length = len(content) if content else 0
+                        logger.info(f"[STREAM_DEBUG] Sending chunk #{chunk_count}, content length: {content_length}, elapsed: {elapsed_time:.2f}s")
+                        message_queue.put((f"data: {data_str}\n\n".encode('utf-8'), "[CONTENT]"))
                     else:
-                        logger.warning("Parsed response data is None, skipping chunk")
-                    
+                        logger.warning(f"[STREAM_DEBUG] Parsed response data is None for chunk #{chunk_count}")
+                
+                # Handle the case where no responses were received
+                if chunk_count == 0:
+                    logger.info("[STREAM_DEBUG] No chunks received, sending empty message")
+                    thinking_message = {
+                        "id": str(uuid.uuid4()),
+                        "object": "chat.completion.chunk",
+                        "created": int(datetime.now().timestamp()),
+                        "model": "models/lpm",
+                        "system_fingerprint": None,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {
+                                    "content": ""  # Empty content won't affect frontend display
+                                },
+                                "finish_reason": None
+                            }
+                        ]
+                    }
+                    data_str = json.dumps(thinking_message)
+                    message_queue.put((f"data: {data_str}\n\n".encode('utf-8'), "[THINKING]"))
+                
+                # Model processing is complete, send end marker
+                if chunk != "[DONE]":
+                    logger.info(f"[STREAM_DEBUG] Sending final [DONE] marker after {elapsed_time:.2f}s")
+                    message_queue.put((b"data: [DONE]\n\n", "[DONE]"))
+                
             except Exception as e:
-                error_msg = json.dumps({'error': str(e)})
-                logger.error(f"Failed to process stream response: {str(e)}", exc_info=True)
-                yield f"data: {error_msg}\n\n".encode('utf-8')
+                logger.error(f"[STREAM_DEBUG] Error processing model response: {str(e)}", exc_info=True)
+                message_queue.put((f"data: {{\"error\": \"{str(e)}\"}}\n\n".encode('utf-8'), "[ERROR]"))
+                message_queue.put((b"data: [DONE]\n\n", "[DONE]"))
             finally:
-                if chunk != "[DONE]":  # Only send if [DONE] marker was not received
-                    logger.info("Sending final [DONE] marker")
+                # Set completion event to notify heartbeat thread to stop
+                completion_event.set()
+                logger.info(f"[STREAM_DEBUG] Model response thread completed with {chunk_count} chunks")
+        
+        def generate():
+            """Main generator function for generating responses"""
+            # Start heartbeat thread
+            heart_thread = threading.Thread(target=heartbeat_thread, daemon=True)
+            heart_thread.start()
+            
+            # Start model response processing thread
+            model_thread = threading.Thread(target=model_response_thread, daemon=True)
+            model_thread.start()
+            
+            try:
+                # Get messages from queue and return to client
+                while True:
+                    try:
+                        # Use short timeout to get message, prevent blocking
+                        message, message_type = message_queue.get(timeout=0.1)
+                        logger.debug(f"[STREAM_DEBUG] Yielding message type: {message_type}")
+                        yield message
+                        
+                        # If end marker is received, exit loop
+                        if message_type == "[DONE]":
+                            logger.info("[STREAM_DEBUG] Received [DONE] marker, ending generator")
+                            break
+                    except queue.Empty:
+                        # Queue is empty, continue trying to get message
+                        # Check if model thread has completed but didn't send [DONE]
+                        if completion_event.is_set() and not model_thread.is_alive():
+                            logger.warning("[STREAM_DEBUG] Model thread completed without [DONE], ending generator")
+                            yield b"data: [DONE]\n\n"
+                            break
+                        pass
+            except GeneratorExit:
+                # Client closed connection
+                logger.info("[STREAM_DEBUG] Client closed connection (GeneratorExit)")
+                completion_event.set()
+            except Exception as e:
+                logger.error(f"[STREAM_DEBUG] Error in generator: {str(e)}", exc_info=True)
+                try:
+                    yield f"data: {{\"error\": \"Generator error: {str(e)}\"}}\n\n".encode('utf-8')
                     yield b"data: [DONE]\n\n"
-                logger.info("Stream response completed successfully")
-
+                except:
+                    pass
+                completion_event.set()
+            finally:
+                # Ensure completion event is set
+                completion_event.set()
+                # Wait for threads to complete
+                if heart_thread.is_alive():
+                    heart_thread.join(timeout=1.0)
+                if model_thread.is_alive():
+                    model_thread.join(timeout=1.0)
+                logger.info("[STREAM_DEBUG] Generator completed")
+        
+        # Return response
         return Response(
             generate(),
             mimetype='text/event-stream',

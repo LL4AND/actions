@@ -1,42 +1,45 @@
 from enum import Enum
 from typing import Dict, List, Optional
+
 import json
 import os
 import re
 import time
+import threading
+import gc
+import subprocess
 import psutil
+
 from lpm_kernel.configs.config import Config
+from lpm_kernel.configs.logging import get_train_process_logger, TRAIN_LOG_FILE
 from lpm_kernel.L1.utils import save_true_topics
 from lpm_kernel.L1.serializers import NotesStorage
 from lpm_kernel.kernel.note_service import NoteService
 from lpm_kernel.L2.l2_generator import L2Generator
 from lpm_kernel.L2.utils import save_hf_model
 from lpm_kernel.api.common.responses import APIResponse
+from lpm_kernel.api.common.script_executor import ScriptExecutor
 from lpm_kernel.api.domains.loads.services import LoadService
+from lpm_kernel.api.domains.trainprocess.progress_enum import Status
+from lpm_kernel.api.domains.trainprocess.train_progress import TrainProgress
+from lpm_kernel.api.domains.trainprocess.process_step import ProcessStep
+from lpm_kernel.api.domains.trainprocess.progress_holder import TrainProgressHolder
+from lpm_kernel.api.domains.kernel.routes import store_l1_data
+from lpm_kernel.train.training_params_manager import TrainingParamsManager
+from lpm_kernel.common.repository.database_session import DatabaseSession
+from lpm_kernel.backup.auto_backup import AutoBackupManager
 from lpm_kernel.kernel.chunk_service import ChunkService
 from lpm_kernel.kernel.l1.l1_manager import (
     extract_notes_from_documents,
     document_service,
     get_latest_status_bio,
     get_latest_global_bio,
+    generate_l1_from_l0,
 )
-from lpm_kernel.api.common.script_executor import ScriptExecutor
-from lpm_kernel.configs.config import Config
 from lpm_kernel.file_data.chunker import DocumentChunker
-from lpm_kernel.kernel.l1.l1_manager import generate_l1_from_l0
-import threading
-from lpm_kernel.api.domains.trainprocess.progress_enum import Status
-from lpm_kernel.api.domains.trainprocess.train_progress import TrainProgress
-from lpm_kernel.api.domains.trainprocess.process_step import ProcessStep
-from lpm_kernel.api.domains.trainprocess.progress_holder import TrainProgressHolder
-from lpm_kernel.train.training_params_manager import TrainingParamsManager
-from lpm_kernel.backup.auto_backup import AutoBackupManager
-import gc
-import subprocess
-import shlex
 
-from lpm_kernel.configs.logging import get_train_process_logger, TRAIN_LOG_FILE
 logger = get_train_process_logger()
+
 
 class TrainProcessService:
     """Training process service (singleton pattern)"""
@@ -49,7 +52,7 @@ class TrainProcessService:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, current_model_name: str = None, is_cot: bool = False):
+    def __init__(self, current_model_name: str = None):
         if not self._initialized:
             # Generate a unique progress file name based on model name
             self.progress = TrainProgressHolder(current_model_name)
@@ -77,7 +80,6 @@ class TrainProcessService:
             self.model_name = current_model_name
             # Create new progress instance with updated progress file name
             self.progress = TrainProgressHolder(current_model_name)
-        self.is_cot = is_cot
 
     def list_documents(self):
         """List all documents"""
@@ -217,12 +219,16 @@ class TrainProcessService:
             # Mark step as in progress
             self.progress.mark_step_status(ProcessStep.GENERATE_BIOGRAPHY, Status.IN_PROGRESS)
             logger.info("Starting biography generation...")
-            
+
             # Generate L1 data and biography
             logger.info("Generating L1 data and biography...")
-            generate_l1_from_l0()
+            l1_data = generate_l1_from_l0()
             logger.info("Successfully generated L1 data and biography")
-            
+
+            # Store L1 data
+            with DatabaseSession.session() as session:
+                store_l1_data(session, l1_data)
+
             # Mark step as completed
             self.progress.mark_step_status(ProcessStep.GENERATE_BIOGRAPHY, Status.COMPLETED)
             logger.info("Biography generation completed successfully")
@@ -305,7 +311,8 @@ class TrainProcessService:
             self._prepare_l2_data()
 
             # Use data from l2_data dictionary
-            L2Generator(is_cot=self.is_cot).gen_preference_data(                
+            training_params = TrainingParamsManager.get_latest_training_params()
+            L2Generator(is_cot=training_params.get("is_cot", False)).gen_preference_data(                
                     self.l2_data["notes"],
                     self.l2_data["basic_info"],
                     self.l2_data["data_output_base_dir"],
@@ -333,9 +340,11 @@ class TrainProcessService:
             # Get or prepare L2 data
             self._prepare_l2_data()
 
+            # Get training parameters
+            training_params = TrainingParamsManager.get_latest_training_params()
             # Use data from l2_data dictionary
             l2_generator = L2Generator(
-                data_path=os.path.join(os.getcwd(), "resources"), is_cot=self.is_cot
+                data_path=os.path.join(os.getcwd(), "resources"), is_cot=training_params.get("is_cot", False)
                 )  
             l2_generator.gen_selfqa_data(
                     self.l2_data["notes"],
@@ -383,8 +392,10 @@ class TrainProcessService:
             # Get or prepare L2 data
             self._prepare_l2_data()
 
+            # Get training parameters
+            training_params = TrainingParamsManager.get_latest_training_params()
             # Use data from l2_data dictionary
-            l2_generator = L2Generator(data_path=os.path.join(os.getcwd(), "resources"), is_cot=self.is_cot)
+            l2_generator = L2Generator(data_path=os.path.join(os.getcwd(), "resources"), is_cot=training_params.get("is_cot", False))
             l2_generator.gen_diversity_data(
                 self.l2_data["notes"],
                 self.l2_data["basic_info"],
@@ -626,6 +637,7 @@ class TrainProcessService:
             num_train_epochs = training_params.get("number_of_epochs")
             concurrency_threads = training_params.get("concurrency_threads")
             data_synthesis_mode = training_params.get("data_synthesis_mode")
+            is_cot = training_params.get("is_cot", False)
             
             # Log training parameters
             logger.info("Training parameters from latest settings:")
@@ -641,7 +653,8 @@ class TrainProcessService:
                 "--lr", str(learning_rate),
                 "--epochs", str(num_train_epochs),
                 "--threads", str(concurrency_threads),
-                "--mode", str(data_synthesis_mode)
+                "--mode", str(data_synthesis_mode),
+                "--is_cot", str(is_cot)
             ]
             
             # Ensure log directory exists
