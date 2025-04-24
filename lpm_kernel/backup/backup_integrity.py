@@ -20,20 +20,37 @@ class BackupIntegrity:
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest()
     
-    def compress_file(self, file_path: Path, compressed_path: Optional[Path] = None) -> Path:
-        """Compress a file using zlib."""
+    def compress_file(self, file_path: Path, compressed_path: Optional[Path] = None, compression_level: int = 6) -> Path:
+        """Compress a file using zlib with configurable compression level (1-9)."""
         if not compressed_path:
             compressed_path = file_path.with_suffix('.gz')
         
         try:
-            with open(file_path, 'rb') as f_in:
-                data = f_in.read()
-            compressed_data = zlib.compress(data)
-            with open(compressed_path, 'wb') as f_out:
-                f_out.write(compressed_data)
+            # 使用分块读取以处理大文件
+            chunk_size = 1024 * 1024  # 1MB chunks
+            compressor = zlib.compressobj(level=compression_level)
+            with open(file_path, 'rb') as f_in, open(compressed_path, 'wb') as f_out:
+                while True:
+                    chunk = f_in.read(chunk_size)
+                    if not chunk:
+                        break
+                    compressed_chunk = compressor.compress(chunk)
+                    if compressed_chunk:
+                        f_out.write(compressed_chunk)
+                # 确保写入所有剩余的压缩数据
+                f_out.write(compressor.flush())
+            
+            # 计算压缩比
+            original_size = file_path.stat().st_size
+            compressed_size = compressed_path.stat().st_size
+            compression_ratio = (1 - compressed_size / original_size) * 100
+            logger.info(f"Compressed {file_path.name}: {compression_ratio:.1f}% reduction (Level {compression_level})")
+            
             return compressed_path
         except Exception as e:
             logger.error(f"Error compressing {file_path}: {e}")
+            if compressed_path.exists():
+                compressed_path.unlink()  # 清理失败的压缩文件
             raise
     
     def decompress_file(self, compressed_path: Path, output_path: Optional[Path] = None) -> Path:

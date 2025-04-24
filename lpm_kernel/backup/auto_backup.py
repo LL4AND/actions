@@ -1,5 +1,6 @@
 import threading
 import time
+import random
 from datetime import datetime, timedelta
 from pathlib import Path
 import json
@@ -97,6 +98,7 @@ class AutoBackupManager:
                 
                 retry_count = 0
                 backup_success = False
+                base_delay = self.retry_delay
                 
                 while retry_count < self.max_retries:
                     try:
@@ -115,8 +117,12 @@ class AutoBackupManager:
                         retry_count += 1
                         error_msg = str(backup_error)
                         if retry_count < self.max_retries:
-                            logger.warning(f"Backup attempt {retry_count} failed: {error_msg}, retrying in {self.retry_delay} seconds...")
-                            time.sleep(self.retry_delay)
+                            # 使用指数退避策略计算下一次重试延迟
+                            current_delay = min(base_delay * (2 ** (retry_count - 1)), 300)  # 最大延迟5分钟
+                            jitter = random.uniform(0, min(current_delay * 0.1, 30))  # 添加随机抖动
+                            retry_delay = current_delay + jitter
+                            logger.warning(f"Backup attempt {retry_count} failed: {error_msg}, retrying in {retry_delay:.1f} seconds...")
+                            time.sleep(retry_delay)
                         else:
                             logger.error(f"All backup attempts failed after {self.max_retries} retries: {error_msg}")
                 
@@ -136,25 +142,48 @@ class AutoBackupManager:
                 time.sleep(60)
     
     def _cleanup_old_auto_backups(self):
-        """Removes old automatic backups to save space"""
+        """Removes old automatic backups based on count and size limits"""
         try:
-            # Get all backups
+            # 获取所有备份
             backups = self.backup_service.list_backups()
             
-            # Filter automatic backups
+            # 过滤自动备份
             auto_backups = [b for b in backups if 
                           "automatic backup" in b.get("description", "").lower()]
             
-            # Sort by timestamp (newest first)
+            # 按时间戳排序（最新的在前）
             auto_backups.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
             
-            # Delete old backups beyond the maximum limit
-            if len(auto_backups) > self.max_auto_backups:
-                for backup in auto_backups[self.max_auto_backups:]:
+            # 获取配置的大小限制（默认50GB）
+            max_total_size_gb = float(self.config.get("MAX_AUTO_BACKUP_SIZE_GB", "50"))
+            max_total_size_bytes = max_total_size_gb * 1024 * 1024 * 1024
+            
+            # 跟踪已使用的总大小
+            total_size = 0
+            backups_to_keep = []
+            
+            # 首先保留最新的必需备份数量
+            min_backups_to_keep = max(1, min(self.max_auto_backups // 2, 3))  # 至少保留1个，最多保留3个最新备份
+            backups_to_keep.extend(auto_backups[:min_backups_to_keep])
+            total_size = sum(b.get("size_bytes", 0) for b in backups_to_keep)
+            
+            # 处理剩余的备份
+            for backup in auto_backups[min_backups_to_keep:]:
+                backup_size = backup.get("size_bytes", 0)
+                
+                # 如果添加此备份后仍在限制范围内，且未超过最大数量限制，则保留
+                if (total_size + backup_size <= max_total_size_bytes and 
+                    len(backups_to_keep) < self.max_auto_backups):
+                    backups_to_keep.append(backup)
+                    total_size += backup_size
+                else:
+                    # 删除不满足条件的备份
                     backup_id = backup.get("id")
                     if backup_id:
-                        logger.info(f"Cleaning up old auto backup: {backup_id}")
+                        logger.info(f"Cleaning up old auto backup: {backup_id} (size: {backup_size/(1024*1024):.2f}MB)")
                         self.backup_service.delete_backup(backup_id)
+            
+            logger.info(f"Backup cleanup completed. Keeping {len(backups_to_keep)} backups, total size: {total_size/(1024*1024*1024):.2f}GB")
         
         except Exception as e:
             logger.error(f"Error cleaning up old auto backups: {e}", exc_info=True)
