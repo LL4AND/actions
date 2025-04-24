@@ -78,19 +78,26 @@ class AutoBackupManager:
     
     def _periodic_backup_worker(self, model_name=None):
         """Worker function that creates periodic backups"""
+        last_backup_time = None
+        consecutive_failures = 0
+        max_consecutive_failures = 3
+        
         while not self.stop_flag.is_set():
             try:
-                # Sleep for the specified interval
-                for _ in range(self.backup_interval * 60):
-                    if self.stop_flag.is_set():
-                        return
-                    time.sleep(1)
+                current_time = datetime.now()
+                
+                # Check if enough time has passed since last backup
+                if last_backup_time and (current_time - last_backup_time).total_seconds() < self.backup_interval * 60:
+                    time.sleep(60)  # Check every minute
+                    continue
                 
                 # Create backup with retries
                 description = f"Training in-progress automatic backup{' for ' + model_name if model_name else ''}"
                 logger.info(f"Creating periodic backup: {description}")
                 
                 retry_count = 0
+                backup_success = False
+                
                 while retry_count < self.max_retries:
                     try:
                         backup_result = self.backup_service.create_backup(
@@ -99,16 +106,26 @@ class AutoBackupManager:
                         )
                         if backup_result:
                             logger.info("Backup created successfully")
+                            last_backup_time = current_time
+                            consecutive_failures = 0
+                            backup_success = True
                             break
                         raise Exception("Backup creation failed")
                     except Exception as backup_error:
                         retry_count += 1
+                        error_msg = str(backup_error)
                         if retry_count < self.max_retries:
-                            logger.warning(f"Backup attempt {retry_count} failed, retrying in {self.retry_delay} seconds...")
+                            logger.warning(f"Backup attempt {retry_count} failed: {error_msg}, retrying in {self.retry_delay} seconds...")
                             time.sleep(self.retry_delay)
                         else:
-                            logger.error(f"All backup attempts failed after {self.max_retries} retries")
-                            raise backup_error
+                            logger.error(f"All backup attempts failed after {self.max_retries} retries: {error_msg}")
+                
+                if not backup_success:
+                    consecutive_failures += 1
+                    if consecutive_failures >= max_consecutive_failures:
+                        logger.critical(f"Stopping automatic backup after {consecutive_failures} consecutive failures")
+                        self.stop_flag.set()
+                        break
                 
                 # Clean up old auto backups if needed
                 self._cleanup_old_auto_backups()

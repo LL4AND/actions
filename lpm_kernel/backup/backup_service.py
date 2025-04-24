@@ -198,6 +198,10 @@ class BackupService:
         if not self._acquire_distributed_lock():
             logger.error("Failed to acquire lock for backup restoration")
             return {"status": "error", "message": "Failed to acquire lock for backup restoration"}
+
+        total_files = 0
+        restored_files = 0
+        failed_files = []
             
         try:
             logger.info(f"Attempting to restore backup: {backup_id}")
@@ -239,46 +243,70 @@ class BackupService:
             
             # Restore each backed up item
             restored_items = []
-            for item in metadata.get('items', []):
-                source_path = backup_to_restore / Path(item).name
-                target_path = base_dir / item
-                
-                if not source_path.exists():
-                    logger.warning(f"Source path {source_path} does not exist in backup, skipping.")
-                    continue
-                
-                try:
-                    # Create parent directory if it doesn't exist
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
+            total_files = len(metadata.get('items', []))
+            
+            with tqdm(total=total_files, desc="Restoring backup") as pbar:
+                for item in metadata.get('items', []):
+                    source_path = backup_to_restore / Path(item).name
+                    target_path = base_dir / item
                     
-                    # Remove existing data if it exists
-                    if target_path.exists():
-                        if target_path.is_dir():
-                            shutil.rmtree(target_path)
-                            logger.info(f"Removed existing directory: {target_path}")
+                    if not source_path.exists():
+                        logger.warning(f"Source path {source_path} does not exist in backup, skipping.")
+                        failed_files.append({"path": str(source_path), "error": "Source file missing"})
+                        pbar.update(1)
+                        continue
+                    
+                    try:
+                        # Create parent directory if it doesn't exist
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Remove existing data if it exists
+                        if target_path.exists():
+                            if target_path.is_dir():
+                                shutil.rmtree(target_path)
+                                logger.info(f"Removed existing directory: {target_path}")
+                            else:
+                                target_path.unlink()
+                                logger.info(f"Removed existing file: {target_path}")
+                        
+                        # Process backup files (decompress and decrypt if needed)
+                        current_source = source_path
+                        if self.encrypt_backup:
+                            current_source = self.integrity_checker.decrypt_file(current_source)
+                        if self.compress_backup:
+                            current_source = self.integrity_checker.decompress_file(current_source)
+                        
+                        # Copy from backup to target
+                        if current_source.is_dir():
+                            shutil.copytree(current_source, target_path)
+                            logger.info(f"Restored directory from {current_source} to {target_path}")
                         else:
-                            target_path.unlink()
-                            logger.info(f"Removed existing file: {target_path}")
-                    
-                    # Copy from backup to target
-                    if source_path.is_dir():
-                        shutil.copytree(source_path, target_path)
-                        logger.info(f"Restored directory from {source_path} to {target_path}")
-                    else:
-                        shutil.copy2(source_path, target_path)
-                        logger.info(f"Restored file from {source_path} to {target_path}")
-                    
-                    restored_items.append(item)
-                except Exception as e:
-                    logger.error(f"Error restoring {item}: {e}", exc_info=True)
+                            shutil.copy2(current_source, target_path)
+                            logger.info(f"Restored file from {current_source} to {target_path}")
+                        
+                        restored_items.append(item)
+                        restored_files += 1
+                    except Exception as e:
+                        error_msg = str(e)
+                        logger.error(f"Error restoring {item}: {error_msg}", exc_info=True)
+                        failed_files.append({"path": str(source_path), "error": error_msg})
+                    finally:
+                        pbar.update(1)
             
             # Return success with details
+            status = "success" if not failed_files else "partial_success"
             return {
-                "status": "success", 
-                "message": f"Successfully restored backup {backup_id}",
+                "status": status,
+                "message": f"Restored backup {backup_id}: {restored_files}/{total_files} files restored successfully",
                 "restored_items": restored_items,
+                "failed_items": failed_files,
                 "timestamp": metadata.get('timestamp'),
-                "description": metadata.get('description')
+                "description": metadata.get('description'),
+                "stats": {
+                    "total_files": total_files,
+                    "restored_files": restored_files,
+                    "failed_files": len(failed_files)
+                }
             }
             
         except Exception as e:
