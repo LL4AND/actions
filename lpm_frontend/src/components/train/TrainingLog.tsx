@@ -15,8 +15,8 @@ const TrainingLog: React.FC<TrainingLogProps> = ({ trainingDetails }: TrainingLo
 
   // Smooth scroll console to bottom
   const smoothScrollConsole = () => {
-    if (consoleEndRef.current && isAutoScrollEnabled && !isUserScrolling) {
-      const consoleContainer = consoleEndRef.current.closest('.overflow-y-auto');
+    if (consoleEndRef.current && !isUserScrolling) {
+      const consoleContainer = consoleEndRef.current;
 
       if (consoleContainer instanceof HTMLElement) {
         consoleContainer.scrollTo({
@@ -65,7 +65,7 @@ const TrainingLog: React.FC<TrainingLogProps> = ({ trainingDetails }: TrainingLo
 
     // Find the console container and attach the scroll listener
     if (consoleEndRef.current) {
-      const consoleContainer = consoleEndRef.current.closest('.overflow-y-auto');
+      const consoleContainer = consoleEndRef.current;
 
       if (consoleContainer instanceof HTMLElement) {
         consoleContainer.addEventListener('scroll', handleUserScroll);
@@ -99,22 +99,11 @@ const TrainingLog: React.FC<TrainingLogProps> = ({ trainingDetails }: TrainingLo
 
   return (
     <div className="mt-4">
-      <div className="flex justify-between items-center mb-2">
-        <h4 className="text-sm font-medium text-gray-700">Training Log</h4>
-        <div className="flex items-center">
-          <button 
-            onClick={toggleAutoScroll}
-            className={`text-xs px-2 py-1 rounded ${
-              isAutoScrollEnabled 
-                ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
-            } transition-colors`}
-          >
-            {isAutoScrollEnabled ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
-          </button>
-        </div>
-      </div>
-      <div className="bg-gray-900 rounded-lg p-4 h-[600px] overflow-y-auto font-mono text-xs">
+      <h4 className="text-sm font-medium text-gray-700 mb-2">Training Log</h4>
+      <div
+        ref={consoleEndRef}
+        className="bg-gray-900 rounded-lg p-4 h-[600px] overflow-y-auto font-mono text-xs"
+      >
         <div className="space-y-1">
           {trainingDetails.length > 0 ? (
             trainingDetails.map((detail, index) => (
@@ -127,7 +116,6 @@ const TrainingLog: React.FC<TrainingLogProps> = ({ trainingDetails }: TrainingLo
               No training logs available. Start training to see logs here.
             </div>
           )}
-          <div ref={consoleEndRef} />
         </div>
       </div>
     </div>

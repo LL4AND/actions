@@ -7,6 +7,7 @@ CONCURRENCY_THREADS="2"
 DATA_SYNTHESIS_MODE="low"
 HALF=False
 USE_CUDA=False
+IS_COT=False
 
 # Process parameters
 while [[ "$#" -gt 0 ]]; do
@@ -28,6 +29,7 @@ while [[ "$#" -gt 0 ]]; do
                 export CUDA_VISIBLE_DEVICES=""
             fi
             shift ;;
+        --is_cot) IS_COT="$2"; shift ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
@@ -40,6 +42,7 @@ echo "  Number of epochs: $NUM_TRAIN_EPOCHS"
 echo "  Concurrency threads: $CONCURRENCY_THREADS"
 echo "  Data synthesis mode: $DATA_SYNTHESIS_MODE"
 echo "  Use CUDA: $USE_CUDA"
+echo "  Is chain of thought: $IS_COT"
 
 # If concurrency threads are set, configure related environment variables
 if [ "$CONCURRENCY_THREADS" != "1" ]; then
@@ -91,6 +94,7 @@ python lpm_kernel/L2/train.py \
   --use_4bit_quantization False \
   --use_nested_quant False \
   --bnb_4bit_compute_dtype "bfloat16" \
-  --is_cot False \
   --use_cuda $USE_CUDA
+  --bnb_4bit_compute_dtype "bfloat16"\
+  --is_cot $IS_COT
 
