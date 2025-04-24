@@ -11,6 +11,10 @@ from .backup_integrity import BackupIntegrity
 
 # Placeholder for backup service implementation
 
+import threading
+import fcntl
+import time
+
 class BackupService:
     def __init__(self, config):
         self.config = config
@@ -36,6 +40,38 @@ class BackupService:
         # Backup settings
         self.compress_backup = config.get("BACKUP_COMPRESS", "true").lower() == "true"
         self.encrypt_backup = config.get("BACKUP_ENCRYPT", "false").lower() == "true"
+        
+        # Initialize locks
+        self._operation_lock = threading.Lock()
+        self._lock_file_path = self.backup_base_dir / ".backup.lock"
+        self._lock_file = None
+        
+    def _acquire_distributed_lock(self, timeout=30):
+        """Acquire distributed lock using file locking"""
+        start_time = time.time()
+        while True:
+            try:
+                self._lock_file = open(self._lock_file_path, 'w')
+                fcntl.flock(self._lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                logger.debug("Acquired distributed lock for backup operation")
+                return True
+            except IOError:
+                if time.time() - start_time > timeout:
+                    logger.error("Timeout waiting for distributed lock")
+                    return False
+                time.sleep(1)
+                
+    def _release_distributed_lock(self):
+        """Release distributed lock"""
+        if self._lock_file:
+            try:
+                fcntl.flock(self._lock_file.fileno(), fcntl.LOCK_UN)
+                self._lock_file.close()
+                self._lock_file = None
+                logger.debug("Released distributed lock for backup operation")
+            except Exception as e:
+                logger.error(f"Error releasing distributed lock: {e}")
+
 
     def create_backup(self, description=None, tags: Optional[List[str]] = None, name: Optional[str] = None):
         """Creates a new backup."""
@@ -159,9 +195,14 @@ class BackupService:
 
     def restore_backup(self, backup_id, verify_integrity: bool = True):
         """Restores data from a specific backup."""
-        logger.info(f"Attempting to restore backup: {backup_id}")
-        # Find the backup directory
-        backup_to_restore = None
+        if not self._acquire_distributed_lock():
+            logger.error("Failed to acquire lock for backup restoration")
+            return {"status": "error", "message": "Failed to acquire lock for backup restoration"}
+            
+        try:
+            logger.info(f"Attempting to restore backup: {backup_id}")
+            # Find the backup directory
+            backup_to_restore = None
         for backup_dir in self.backup_base_dir.iterdir():
             if backup_dir.is_dir() and backup_dir.name.endswith(backup_id[:8]): # Simple check based on folder name convention
                 metadata_file = backup_dir / "backup_metadata.json"

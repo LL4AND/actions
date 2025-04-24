@@ -14,24 +14,29 @@ class AutoBackupManager:
     
     _instance = None
     _initialized = False
+    _lock = threading.Lock()
     
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
     
     def __init__(self, config=None):
-        if not self._initialized:
-            self.config = config or Config.from_env()
-            self.backup_service = BackupService(self.config)
-            self.backup_thread = None
-            self.stop_flag = threading.Event()
-            self.backup_interval = int(self.config.get("AUTO_BACKUP_INTERVAL_MINUTES", "30"))
-            self.max_auto_backups = int(self.config.get("MAX_AUTO_BACKUPS", "5"))
-            self.auto_backup_enabled = self.config.get("AUTO_BACKUP_ENABLED", "true").lower() == "true"
-            self.max_retries = int(self.config.get("BACKUP_MAX_RETRIES", "3"))
-            self.retry_delay = int(self.config.get("BACKUP_RETRY_DELAY_SECONDS", "60"))
-            self._initialized = True
+        with self._lock:
+            if not self._initialized:
+                self.config = config or Config.from_env()
+                self.backup_service = BackupService(self.config)
+                self.backup_thread = None
+                self.stop_flag = threading.Event()
+                self.thread_lock = threading.Lock()
+                self.backup_interval = int(self.config.get("AUTO_BACKUP_INTERVAL_MINUTES", "30"))
+                self.max_auto_backups = int(self.config.get("MAX_AUTO_BACKUPS", "5"))
+                self.auto_backup_enabled = self.config.get("AUTO_BACKUP_ENABLED", "true").lower() == "true"
+                self.max_retries = int(self.config.get("BACKUP_MAX_RETRIES", "3"))
+                self.retry_delay = int(self.config.get("BACKUP_RETRY_DELAY_SECONDS", "60"))
+                self._initialized = True
     
     def create_pre_training_backup(self, model_name=None):
         """Creates a backup before training starts"""
