@@ -677,12 +677,8 @@ class TopicsGenerator:
         Returns:
             A tuple containing the values for the two keys
         """
-        spl = key1 + '":'
-        b = '{"' + spl + "".join(content.split(spl)[1:])
-        c = b.split("}")[0] + "}"
-        res_dict = json.loads(c)
-
-        return res_dict[key1], res_dict[key2]
+        data = json.loads(content)
+        return data[key1], data[key2]
 
 
     def __build_embedding_chunks(self, notes_list: List[Note]) -> tuple:
