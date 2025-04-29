@@ -247,6 +247,7 @@ class MODEL_ARCH(IntEnum):
     STABLELM = auto()
     QWEN = auto()
     QWEN2 = auto()
+    QWEN3 = auto()
     QWEN2MOE = auto()
     QWEN2VL = auto()
     PHI2 = auto()
@@ -434,6 +435,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.STABLELM: "stablelm",
     MODEL_ARCH.QWEN: "qwen",
     MODEL_ARCH.QWEN2: "qwen2",
+    MODEL_ARCH.QWEN3: "qwen3",
     MODEL_ARCH.QWEN2MOE: "qwen2moe",
     MODEL_ARCH.QWEN2VL: "qwen2vl",
     MODEL_ARCH.PHI2: "phi2",
