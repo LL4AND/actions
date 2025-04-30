@@ -2,7 +2,13 @@ import json
 import argparse
 import torch
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+try:
+    from unsloth import FastLanguageModel, FastTokenizer
+    UNSLOTH_AVAILABLE = True
+except ImportError:
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    UNSLOTH_AVAILABLE = False
+
 from datasets import Dataset
 from trl import DPOConfig, DPOTrainer
 from peft import LoraConfig
@@ -20,6 +26,19 @@ def get_east_eight_time_formatted():
 
 # task = Task.init(project_name="mind_dpo", task_name="qwen25-instruct-" + get_east_eight_time_formatted())
 
+def get_supported_dtype():
+    # Try bf16, fallback to f16
+    if torch.cuda.is_available():
+        if torch.cuda.is_bf16_supported():
+            return torch.bfloat16, "bfloat16"
+        else:
+            return torch.float16, "float16"
+    try:
+        _ = torch.zeros(1, dtype=torch.bfloat16)
+        return torch.bfloat16, "bfloat16"
+    except Exception:
+        return torch.float16, "float16"
+
 def training_data_processor(args, SYS = "You are a helpful assistant.\n\n"):
     with open(args.training_data_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -33,7 +52,10 @@ def training_data_processor(args, SYS = "You are a helpful assistant.\n\n"):
         "chosen": [data_point["chosen"] for data_point in data],
         "rejected": [data_point["rejected"] for data_point in data]
     }
-    tokenizer = AutoTokenizer.from_pretrained(args.base_model_path, padding_side="left")
+    if UNSLOTH_AVAILABLE:
+        tokenizer = FastTokenizer.from_pretrained(args.base_model_path, padding_side="left")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.base_model_path, padding_side="left")
     training_data = {
         "prompt": tokenizer.apply_chat_template(training_data["prompt"], tokenize=False),
         "chosen": training_data["chosen"],
@@ -42,13 +64,24 @@ def training_data_processor(args, SYS = "You are a helpful assistant.\n\n"):
     return training_data
 
 def train(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.base_model_path, padding_side="left")
-    model = AutoModelForCausalLM.from_pretrained(
-    args.base_model_path, 
-    trust_remote_code=True,
-    ignore_mismatched_sizes=True, 
-    torch_dtype=torch.float32,  # CPU doesn't support bfloat16
-)
+    dtype, dtype_str = get_supported_dtype()
+    if UNSLOTH_AVAILABLE:
+        tokenizer = FastTokenizer.from_pretrained(args.base_model_path, padding_side="left")
+        model = FastLanguageModel.from_pretrained(
+            model_name=args.base_model_path,
+            dtype=dtype_str,
+            load_in_4bit=False,
+            load_in_8bit=False,
+            device_map="cpu" if not torch.cuda.is_available() else "auto"
+        )
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.base_model_path, padding_side="left")
+        model = AutoModelForCausalLM.from_pretrained(
+            args.base_model_path, 
+            trust_remote_code=True,
+            ignore_mismatched_sizes=True, 
+            torch_dtype=dtype,
+        )
     time_str = get_east_eight_time_formatted()
 
     # merged_model = model.merge_and_unload()
@@ -61,11 +94,11 @@ def train(args):
         lora_config = None
     else:
         lora_config = LoraConfig(
-            r=16,  # Reduced from 64 for better efficiency
-            lora_alpha=16,  # Adjusted to maintain 2:1 alpha:r ratio
-            lora_dropout=0.0,  # Set to 0.0 for Unsloth compatibility
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
             bias="none",
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],  # Target specific attention layers instead of all linear
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
             task_type="CAUSAL_LM",
             inference_mode=False,
             fan_in_fan_out=False
