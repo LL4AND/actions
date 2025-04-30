@@ -44,7 +44,7 @@ pandas = "2.2.3"
 fnllm = {extras = ["azure", "openai"], version = "0.1.2"}
 transformers = "4.47.1"
 torch = "2.5.1"
-peft = "0.14.0"
+peft = "0.15.2"
 trl = "0.13.0"
 gguf = "0.10.0"
 datasets = "3.3.2"
