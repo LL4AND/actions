@@ -80,7 +80,6 @@ class LocalLLMService:
                 logger.info("Using CPU for inference (GPU not requested)")
 
             # Check for GPU optimization marker
-            gpu_optimized = False
             model_dir = os.path.dirname(model_path)
             gpu_marker_path = os.path.join(model_dir, "gpu_optimized.json")
             if os.path.exists(gpu_marker_path):
@@ -117,66 +116,41 @@ class LocalLLMService:
                 "--cont-batching"         # Enable continuous batching
             ]
             
-            # Set up environment with CUDA variables to ensure GPU detection
             env = os.environ.copy()
+            # Default: do not expose GPU
             env["CUDA_VISIBLE_DEVICES"] = ""
-            
-            # Add GPU-related parameters if CUDA is available
-            if cuda_available and use_gpu:
-                # Force GPU usage with optimal parameters for faster loads
+
+            if use_gpu and cuda_available:
+                # --- GPU/CUDA setup ---
+                # Add GPU-specific llama.cpp arguments
                 cmd.extend([
                     "--n-gpu-layers", "999",  # Use all layers on GPU
                     "--tensor-split", "0",    # Use the first GPU for all operations
                     "--main-gpu", "0",        # Use GPU 0 as the primary device
-                    "--mlock"                 # Lock memory to prevent swapping during inference
+                    "--flash-attn"
                 ])
-                
-                # Set CUDA environment variables to help with GPU detection
-                env["CUDA_VISIBLE_DEVICES"] = "0"  # Force using first GPU
-                
-                # Ensure comprehensive library paths for CUDA
-                cuda_lib_paths = [
-                    "/usr/local/cuda/lib64",
-                    "/usr/lib/cuda/lib64",
-                    "/usr/local/lib",
-                    "/usr/lib/x86_64-linux-gnu",
-                    "/usr/lib/wsl/lib"  # For Windows WSL environments
-                ]
-                
-                # Build a comprehensive LD_LIBRARY_PATH
-                current_ld_path = env.get("LD_LIBRARY_PATH", "")
-                for path in cuda_lib_paths:
-                    if os.path.exists(path) and path not in current_ld_path:
-                        current_ld_path = f"{path}:{current_ld_path}" if current_ld_path else path
-                
-                env["LD_LIBRARY_PATH"] = current_ld_path
-                logger.info(f"Setting LD_LIBRARY_PATH to: {current_ld_path}")
-                
-                # If this is Windows, use different approach for CUDA libraries
-                if os.name == 'nt':
-                    # Windows typically has CUDA in PATH already if installed
-                    logger.info("Windows system detected, using system CUDA libraries")
-                else:
-                    # On Linux, try to find CUDA libraries in common locations
-                    for cuda_path in [
-                        # Common CUDA paths
+                # Set CUDA environment variables
+                env["CUDA_VISIBLE_DEVICES"] = "0"  # Use first GPU
+
+                # Set up LD_LIBRARY_PATH for CUDA (Linux/WSL only)
+                if os.name != 'nt':
+                    cuda_lib_paths = [
                         "/usr/local/cuda/lib64",
                         "/usr/lib/cuda/lib64",
-                        "/usr/local/lib/python3.12/site-packages/nvidia/cuda_runtime/lib",
-                        "/usr/local/lib/python3.10/site-packages/nvidia/cuda_runtime/lib",
-                    ]:
-                        if os.path.exists(cuda_path):
-                            # Add CUDA path to library path
-                            env["LD_LIBRARY_PATH"] = f"{cuda_path}:{env.get('LD_LIBRARY_PATH', '')}"
-                            env["CUDA_HOME"] = os.path.dirname(cuda_path)
-                            logger.info(f"Found CUDA at {cuda_path}, setting environment variables")
-                            break
+                        "/usr/local/lib",
+                        "/usr/lib/x86_64-linux-gnu",
+                        "/usr/lib/wsl/lib"
+                    ]
+                    current_ld_path = env.get("LD_LIBRARY_PATH", "")
+                    for path in cuda_lib_paths:
+                        if os.path.exists(path) and path not in current_ld_path:
+                            current_ld_path = f"{path}:{current_ld_path}" if current_ld_path else path
+                    env["LD_LIBRARY_PATH"] = current_ld_path
+                    logger.info(f"Setting LD_LIBRARY_PATH to: {current_ld_path}")
+                else:
+                    logger.info("Windows system detected, using system CUDA libraries")
 
-                # NOTE: CUDA support and rebuild should be handled at build/setup time (e.g., Docker build or setup script).
-                # The runtime check and rebuild logic has been removed for efficiency and reliability.
-                # Ensure llama.cpp is built with CUDA support before running the server if GPU is required.
-
-                # Pre-heat GPU to ensure faster initial response
+                # Pre-heat GPU for faster initial response
                 if torch.cuda.is_available():
                     logger.info("Pre-warming GPU to reduce initial latency...")
                     dummy_tensor = torch.zeros(1, 1).cuda()
@@ -184,10 +158,9 @@ class LocalLLMService:
                     torch.cuda.synchronize()
                     torch.cuda.empty_cache()
                     logger.info("GPU warm-up complete")
-                
                 logger.info("Using GPU acceleration for inference with optimized settings")
             else:
-                # If GPU isn't available or supported, optimize for CPU
+                # --- CPU setup ---
                 cmd.extend([
                     "--threads", str(max(1, os.cpu_count() - 1)),  # Use all CPU cores except one
                 ])
