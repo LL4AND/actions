@@ -270,13 +270,19 @@ def main(model_args, data_args, training_args):
     model, peft_config, tokenizer = create_and_prepare_model(
         model_args, data_args, training_args, model_kwargs=model_kwargs
     )
-    
-    # If model has meta tensors, handle them properly
-    if hasattr(model, "is_meta") and model.is_meta:
-        logger.info("Model has meta tensors, using to_empty() to properly initialize")
+
+    # Robustly check for meta tensors and handle them
+    def has_meta_tensors(model):
+        return any(
+            (hasattr(p, 'device') and getattr(p, 'device', None) is not None and getattr(p, 'device').type == 'meta')
+            for p in list(model.parameters()) + list(model.buffers())
+        )
+
+    if has_meta_tensors(model):
+        logger.info("Model has parameters on meta device, using to_empty() to properly initialize")
         device = "cuda" if torch.cuda.is_available() and model_args.use_cuda else "cpu"
         model = model.to_empty(device=device)
-    
+
     # Apply gradient checkpointing for memory efficiency
     if training_args.gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
         logger.info("Enabling gradient checkpointing for memory efficiency")
@@ -303,7 +309,6 @@ def main(model_args, data_args, training_args):
         "add_special_tokens": data_args.add_special_tokens,
     }
 
-    # Handle meta tensors if present without using DeepSpeed
     if hasattr(model, "is_meta") and model.is_meta:
         logger.info("Model has meta tensors, initializing properly")
         try:
