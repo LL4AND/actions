@@ -5,7 +5,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import Dataset
 from trl import DPOConfig, DPOTrainer
-from peft import LoraConfig, AutoPeftModelForCausalLM, get_peft_model
+from peft import LoraConfig
 from datetime import datetime, timedelta
 # from clearml import Task
 
@@ -61,12 +61,14 @@ def train(args):
         lora_config = None
     else:
         lora_config = LoraConfig(
-            r=args.lora_r,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout,
+            r=16,  # Reduced from 64 for better efficiency
+            lora_alpha=16,  # Adjusted to maintain 2:1 alpha:r ratio
+            lora_dropout=0.0,  # Set to 0.0 for Unsloth compatibility
             bias="none",
-            target_modules="all-linear",
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],  # Target specific attention layers instead of all linear
             task_type="CAUSAL_LM",
+            inference_mode=False,
+            fan_in_fan_out=False
         )
 
     training_args = DPOConfig(
@@ -126,13 +128,9 @@ if __name__ == "__main__":
     parser.add_argument('--beta', type=float, default=0.1)
     
     # LoRA arguments
-    parser.add_argument('--lora_r', type=int, default=64)
-    parser.add_argument('--lora_alpha', type=int, default=128)
-    parser.add_argument('--lora_dropout', type=float, default=0.1)
-
-    # DeepSpeed arguments
-    parser.add_argument('--deepspeed', type=str, default=None)
-    parser.add_argument('--local_rank', type=int, default=-1)
+    parser.add_argument('--lora_r', type=int, default=16)
+    parser.add_argument('--lora_alpha', type=int, default=16)
+    parser.add_argument('--lora_dropout', type=float, default=0.0)
 
     args = parser.parse_args()
     
