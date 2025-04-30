@@ -72,8 +72,25 @@ def train(args):
             dtype=dtype_str,
             load_in_4bit=False,
             load_in_8bit=False,
-            device_map="cpu" if not torch.cuda.is_available() else "auto"
+            device_map="auto" if torch.cuda.is_available() else "cpu"
         )
+        # Apply LoRA with Unsloth's optimized method if requested
+        if args.lora_r > 0:
+            model = FastLanguageModel.get_peft_model(
+                model,
+                lora_alpha=args.lora_alpha,
+                lora_dropout=args.lora_dropout,
+                r=args.lora_r,
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+                use_gradient_checkpointing=False,
+                random_state=42,
+                max_seq_length=args.max_length,
+            )
+        # Use FastDPOTrainer if available, else fallback
+        try:
+            from unsloth import FastDPOTrainer as DPOTrainerImpl
+        except ImportError:
+            from trl import DPOTrainer as DPOTrainerImpl
     else:
         tokenizer = AutoTokenizer.from_pretrained(args.base_model_path, padding_side="left")
         model = AutoModelForCausalLM.from_pretrained(
@@ -82,17 +99,15 @@ def train(args):
             ignore_mismatched_sizes=True, 
             torch_dtype=dtype,
         )
+        DPOTrainerImpl = DPOTrainer
     time_str = get_east_eight_time_formatted()
-
-    # merged_model = model.merge_and_unload()
-    # merged_model.save_pretrained(merged_model)
 
     data_dict = training_data_processor(args)
     dataset = Dataset.from_dict(data_dict)
 
-    if args.lora_r == 0:
-        lora_config = None
-    else:
+    # Only use LoRA config for non-Unsloth
+    lora_config = None
+    if not UNSLOTH_AVAILABLE and args.lora_r > 0:
         lora_config = LoraConfig(
             r=args.lora_r,
             lora_alpha=args.lora_alpha,
@@ -128,7 +143,7 @@ def train(args):
         beta=args.beta,
     )
 
-    dpo_trainer = DPOTrainer(
+    dpo_trainer = DPOTrainerImpl(
         model,
         tokenizer=tokenizer,
         args=training_args,
@@ -137,7 +152,6 @@ def train(args):
     )
 
     dpo_trainer.train()
-    
     dpo_trainer.save_model()
 
 
