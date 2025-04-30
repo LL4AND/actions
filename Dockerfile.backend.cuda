@@ -49,6 +49,7 @@ RUN if [ "$SKIP_LLAMA_BUILD" = "false" ]; then \
         cd build && \
         echo "Starting CMake configuration with CUDA support..." && \
         cmake -DGGML_CUDA=ON \
+              -DLLAMA_CURL=OFF \
               -DCMAKE_BUILD_TYPE=Release \
               -DBUILD_SHARED_LIBS=OFF \
               -DLLAMA_NATIVE=OFF \

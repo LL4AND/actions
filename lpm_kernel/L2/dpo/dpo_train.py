@@ -35,7 +35,7 @@ def training_data_processor(args, SYS = "You are a helpful assistant.\n\n"):
     }
     tokenizer = AutoTokenizer.from_pretrained(args.base_model_path, padding_side="left")
     training_data = {
-        "prompt": tokenizer.apply_chat_template(training_data["prompt"], tokenize=False),
+        "prompt": tokenizer.apply_chat_template(training_data["prompt"], tokenize=False, enable_thinking=False),
         "chosen": training_data["chosen"],
         "rejected": training_data["rejected"]
     }
