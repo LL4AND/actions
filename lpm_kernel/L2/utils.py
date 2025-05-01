@@ -651,7 +651,7 @@ def save_hf_model(model_name=None, log_file_path=None) -> str:
             logger.warning(f"Failed to get model name from config: {str(e)}. Using Qwen3-0.6B as fallback.")
             model_name = "Qwen3-0.6B"
     
-    base_dir = os.path.join(os.getcwd(), "resources/L2/base_models")
+        base_dir = os.path.join(os.getcwd(), "resources/L2/base_models")
     # Normalize model name and check for path traversal attempts
     normalized_model_name = os.path.normpath(model_name)
     if ".." in normalized_model_name or normalized_model_name.startswith("/"):

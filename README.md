@@ -230,7 +230,7 @@ For data synthesis, we utilized [GraphRAG](https://github.com/microsoft/graphrag
 
 For model deployment, we utilized [llama.cpp](https://github.com/ggml-org/llama.cpp), which provides efficient inference capabilities.
 
-Our base models primarily come from the [Qwen3](https://huggingface.co/Qwen) series.
+Our base models primarily come from the [Qwen](https://huggingface.co/Qwen) series.
 
 We also want to extend our sincere gratitude to all users who have experienced Second Me. We recognize that there is significant room for optimization throughout the entire pipeline, and we are fully committed to iterative improvements to ensure everyone can enjoy the best possible experience locally.
 

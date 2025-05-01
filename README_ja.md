@@ -198,7 +198,7 @@ Made with [contrib.rocks](https://contrib.rocks).
 
 モデルのデプロイには、効率的な推論機能を提供する[llama.cpp](https://github.com/ggml-org/llama.cpp)を使用しました。
 
-私たちのベースモデルは主に[Qwen3](https://huggingface.co/Qwen)シリーズから来ています。
+私たちのベースモデルは主に[Qwen](https://huggingface.co/Qwen)シリーズから来ています。
 
 また、Second Meを体験してくれたすべてのユーザーに心から感謝します。パイプライン全体で最適化の余地が大いにあることを認識しており、皆さんがローカルで最高の体験を楽しめるようにするために、継続的な改善に全力を尽くします。
 
