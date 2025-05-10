@@ -25,6 +25,8 @@ interface TrainStep {
   completed: boolean;
   name: string;
   status: StepStatus;
+  path?: string;
+  have_output?: boolean;
 }
 
 interface TrainStage {
@@ -34,6 +36,17 @@ interface TrainStage {
   steps: TrainStep[];
   current_step: string | null;
 }
+export interface TrainStepJson {
+  content: object[];
+  file_type: 'json';
+}
+
+export interface TrainStepParquet {
+  columns: string[];
+  content: object[];
+  file_type: 'parquet';
+}
+export type TrainStepOutput = TrainStepJson | TrainStepParquet;
 
 export type StageName =
   | 'downloading_the_base_model'
@@ -153,5 +166,12 @@ export const checkCudaAvailability = () => {
   >({
     method: 'get',
     url: '/api/kernel2/cuda/available'
+  });
+};
+
+export const getStepOutputContent = (stepName: string) => {
+  return Request<CommonResponse<TrainStepOutput>>({
+    method: 'get',
+    url: `/api/trainprocess/step_output_content?step_name=${stepName}`
   });
 };

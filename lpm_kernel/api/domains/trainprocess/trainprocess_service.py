@@ -2,6 +2,7 @@ import os
 import re
 import time
 import psutil
+from typing import Optional, Dict
 from lpm_kernel.L1.utils import save_true_topics
 from lpm_kernel.L1.serializers import NotesStorage
 from lpm_kernel.kernel.note_service import NoteService
@@ -25,8 +26,10 @@ from lpm_kernel.api.domains.trainprocess.progress_enum import Status
 from lpm_kernel.api.domains.trainprocess.process_step import ProcessStep
 from lpm_kernel.api.domains.trainprocess.progress_holder import TrainProgressHolder
 from lpm_kernel.api.domains.trainprocess.training_params_manager import TrainingParamsManager
+from lpm_kernel.models.l1 import L1Bio, L1Shade
 from lpm_kernel.common.repository.database_session import DatabaseSession
 from lpm_kernel.api.domains.kernel.routes import store_l1_data
+from lpm_kernel.api.domains.trainprocess.L1_exposure_manager import output_files, query_l1_version_data, read_file_content
 import gc
 import subprocess
 from lpm_kernel.configs.logging import get_train_process_logger, TRAIN_LOG_FILE
@@ -1135,6 +1138,35 @@ class TrainProcessService:
         except Exception as e:
             logger.error(f"Failed to save progress: {str(e)}", exc_info=True)
             
+    def get_step_output_content(self, step_name: str = None) -> Optional[Dict]:
+        """Get content of output file for a specific training step
+        
+        Args:
+            step_name: Name of the step to get content for. Required parameter.
+        
+        Returns:
+            Optional[Dict]: Content of the output file for the specified step, or None if not found
+        """
+        try:
+            if step_name == "generate_biography":
+                logger.info("Querying L1 version data for biography")
+                return query_l1_version_data(1)
+
+            # If step_name is not provided or invalid, return None
+            if not step_name or step_name not in output_files:
+                return None
+            
+            # Get file path for the requested step
+            file_path = output_files[step_name]
+            if not os.path.exists(file_path):
+                return None
+            
+            # Read and return file content
+            return read_file_content(file_path)
+        except Exception as e:
+            logger.error(f"Error getting step output content: {str(e)}")
+            return None
+
     def stop_process(self):
         """Stop training process
         

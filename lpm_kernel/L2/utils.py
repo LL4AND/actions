@@ -445,35 +445,10 @@ def create_and_prepare_model(args, data_args, training_args, model_kwargs=None):
             if args.lora_target_modules != "all-linear"
             else args.lora_target_modules,
         )
-
-    # Load tokenizer - tokenizers are usually small and don't need memory management
-    special_tokens = None
-    chat_template = None
-    if args.chat_template_format == "chatml":
-        special_tokens = ChatmlSpecialTokens
-        chat_template = DEFAULT_CHATML_CHAT_TEMPLATE
-    elif args.chat_template_format == "zephyr":
-        special_tokens = ZephyrSpecialTokens
-        chat_template = DEFAULT_ZEPHYR_CHAT_TEMPLATE
-
-    if special_tokens is not None:
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.model_name_or_path,
-            pad_token=special_tokens.pad_token.value,
-            bos_token=special_tokens.bos_token.value,
-            eos_token=special_tokens.eos_token.value,
-            additional_special_tokens=special_tokens.list(),
-            trust_remote_code=True,
-            padding_side="right",
-        )
-        tokenizer.chat_template = chat_template
-    else:
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.model_name_or_path, trust_remote_code=True
-        )
-        # Make sure pad_token is set
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
+    
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name_or_path, trust_remote_code=True, padding_side="right"
+    )
 
     # Apply Unsloth LoRA if requested and check memory status
     if args.use_unsloth:
