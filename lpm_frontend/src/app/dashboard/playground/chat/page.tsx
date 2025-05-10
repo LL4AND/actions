@@ -52,7 +52,7 @@ export default function PlaygroundChat() {
     const name = loadInfo?.name || 'user';
 
     if (modelType === 'chat') {
-      return `You are ${name}'s "Second Me", which is a personalized AI created by ${name}. You can help ${name} answer questions based on your understanding of ${name}'s background information and past records.`;
+      return `You are ${name}'s "Second Me", which is a personalized AI created by ${name}. You can help ${name} answer questions based on your understanding of ${name}'s background information and past records. /no_think`;
     }
 
     if (modelType === 'thinking') {
