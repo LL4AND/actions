@@ -33,7 +33,7 @@ First, download and install Ollama from the official website:
 
 ```bash
 curl http://127.0.0.1:11434/v1/chat/completions -H "Content-Type: application/json" -d '{
-  "model": "qwen3:0.6b",
+  "model": "qwen2.5:0.5b",
   "messages": [
     {"role": "user", "content": "Why is the sky blue?"}
   ]
@@ -84,7 +84,7 @@ EMBEDDING_MAX_TEXT_LENGTH=embedding_model_context_length
 
 ```
 Chat:
-Model Name: qwen3:0.6b
+Model Name: qwen2.5:0.6b
 API Key: ollama
 API Endpoint: http://127.0.0.1:11434/v1
 
@@ -98,7 +98,7 @@ API Endpoint: http://127.0.0.1:11434/v1
 
 ```
 Chat:
-Model Name: qwen3:0.6b
+Model Name: qwen2.5:0.5b
 API Key: ollama
 API Endpoint: http://host.docker.internal:11434/v1
 

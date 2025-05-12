@@ -77,6 +77,8 @@ class DPOData:
             if sample.get('assistant') is None and sample.get('enhanced_request') is not None:
                 user_message = f"{USER_NAME}'s request is " + sample['user_request']
                 infer_prompt = CONTEXT_COT_PROMPT.format(user_name=USER_NAME) if is_cot else CONTEXT_PROMPT.format(user_name=USER_NAME)
+                if "qwen3" in self.model_name.lower():
+                    infer_prompt += " no_think"
                 messages = [
                     {"role": "system", "content": infer_prompt},
                     {"role": "user", "content": user_message},
@@ -86,6 +88,8 @@ class DPOData:
             if sample.get('assistant') is None and sample.get('user_feedback') is not None:
                 user_message = f"{USER_NAME}'s request is " + sample['user_request'] + "\n" + "The response of expert is " + sample['expert_response']
                 infer_prompt = JUDGE_COT_PROMPT.format(user_name=USER_NAME) if is_cot else JUDGE_PROMPT.format(user_name=USER_NAME)
+                if "qwen3" in self.model_name.lower():
+                    infer_prompt += " no_think"
                 messages = [
                     {"role": "system", "content": infer_prompt},
                     {"role": "user", "content": user_message},
@@ -128,6 +132,8 @@ class DPOData:
                 return [{"messages": messages}]
             else:
                 infer_prompt = MEMORY_COT_PROMPT.format(user_name=USER_NAME) if is_cot else MEMORY_PROMPT.format(user_name=USER_NAME)
+                if "qwen3" in self.model_name.lower():
+                    infer_prompt += " no_think"
                 messages = [
                     {"role": "system", "content": infer_prompt},
                     {"role": "user", "content": sample['user']},

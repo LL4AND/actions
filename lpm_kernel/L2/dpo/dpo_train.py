@@ -34,8 +34,13 @@ def training_data_processor(args, SYS = "You are a helpful assistant.\n\n"):
         "rejected": [data_point["rejected"] for data_point in data]
     }
     tokenizer = AutoTokenizer.from_pretrained(args.base_model_path, padding_side="left")
+    # Only add enable_thinking for qwen3 models
+    if "qwen3" in args.base_model_path.lower():
+        prompt = tokenizer.apply_chat_template(training_data["prompt"], tokenize=False, enable_thinking=False)
+    else:
+        prompt = tokenizer.apply_chat_template(training_data["prompt"], tokenize=False)
     training_data = {
-        "prompt": tokenizer.apply_chat_template(training_data["prompt"], tokenize=False, enable_thinking=False),
+        "prompt": prompt,
         "chosen": training_data["chosen"],
         "rejected": training_data["rejected"]
     }
