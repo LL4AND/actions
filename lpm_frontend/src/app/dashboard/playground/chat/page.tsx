@@ -47,12 +47,14 @@ export default function PlaygroundChat() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [modelType, setModelType] = useState<ModelType | undefined>(undefined);
+  const [modelName, setModelName] = useState<string>('');
 
   const originPrompt = useMemo(() => {
     const name = loadInfo?.name || 'user';
+    const isQwen3 = modelName.toLowerCase().includes('qwen3');
 
     if (modelType === 'chat') {
-      return `You are ${name}'s "Second Me", which is a personalized AI created by ${name}. You can help ${name} answer questions based on your understanding of ${name}'s background information and past records. /no_think`;
+      return `You are ${name}'s "Second Me", which is a personalized AI created by ${name}. You can help ${name} answer questions based on your understanding of ${name}'s background information and past records.${isQwen3 ? ' /no_think' : ''}`;
     }
 
     if (modelType === 'thinking') {
@@ -76,7 +78,7 @@ export default function PlaygroundChat() {
     }
 
     return '';
-  }, [loadInfo, modelType]);
+  }, [loadInfo, modelType, modelName]);
   const originSettings = useMemo(() => {
     return {
       enableL0Retrieval: true,
@@ -110,6 +112,7 @@ export default function PlaygroundChat() {
 
           localStorage.setItem('trainingParams', JSON.stringify(data));
           setModelType(data.is_cot ? 'thinking' : 'chat');
+          setModelName(data.model_name || '');
         } else {
           throw new Error(res.data.message);
         }
