@@ -49,20 +49,37 @@ interface TrainingDetail {
 
 const baseModelOptions = [
   {
+    value: 'Qwen3-0.6B',
+    label: 'Qwen3-0.6B (8GB+ RAM Recommended)'
+  },
+  {
+    value: 'Qwen3-1.7B',
+    label: 'Qwen3-1.7B (16GB+ RAM Recommended)'
+  },
+  {
+    value: 'Qwen3-4B',
+    label: 'Qwen3-4B (32GB+ RAM Recommended)'
+  },
+  {
+    value: 'Qwen3-8B',
+    label: 'Qwen3-8B (64GB+ RAM Recommended)'
+  },
+  // Qwen2.5 models
+  {
     value: 'Qwen2.5-0.5B-Instruct',
-    label: 'Qwen2.5-0.5B-Instruct (8GB+ RAM Recommended)'
+    label: 'Qwen2.5-0.5B (8GB+ RAM Recommended)'
   },
   {
     value: 'Qwen2.5-1.5B-Instruct',
-    label: 'Qwen2.5-1.5B-Instruct (16GB+ RAM Recommended)'
+    label: 'Qwen2.5-1.5B (16GB+ RAM Recommended)'
   },
   {
     value: 'Qwen2.5-3B-Instruct',
-    label: 'Qwen2.5-3B-Instruct (32GB+ RAM Recommended)'
+    label: 'Qwen2.5-3B (32GB+ RAM Recommended)'
   },
   {
     value: 'Qwen2.5-7B-Instruct',
-    label: 'Qwen2.5-7B-Instruct (64GB+ RAM Recommended)'
+    label: 'Qwen2.5-7B (64GB+ RAM Recommended)'
   }
 ];
 

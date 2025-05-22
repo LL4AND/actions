@@ -1,5 +1,5 @@
 # The path to the local model directory or Hugging Face repo.
-model: "mlx-community/Qwen2.5-7B-Instruct-4bit"
+model: "mlx-community/Qwen3-8B-4bit"
 
 # Whether or not to train (boolean)
 train: true

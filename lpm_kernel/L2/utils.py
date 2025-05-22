@@ -515,7 +515,10 @@ def create_chat_data(data_args, tokenizer):
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": sample['enhanced_request'].strip('\n')},
             ]
-            return [{"content": tokenizer.apply_chat_template(messages, tokenize=False)}]
+            if hasattr(tokenizer, 'name_or_path') and 'qwen3' in tokenizer.name_or_path.lower():
+                return [{"content": tokenizer.apply_chat_template(messages, tokenize=False, enable_thinking=False)}]
+            else:
+                return [{"content": tokenizer.apply_chat_template(messages, tokenize=False)}]
         if sample.get('assistant') is None and sample.get('user_feedback') is not None:
             user_message = f"{user_name}'s request is: " + sample['user_request'] + "\n" + "Expert's response is: " + sample['expert_response']
             messages = [
@@ -523,7 +526,10 @@ def create_chat_data(data_args, tokenizer):
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": sample['user_feedback'].strip('\n')},
             ]
-            return [{"content": tokenizer.apply_chat_template(messages, tokenize=False)}]
+            if hasattr(tokenizer, 'name_or_path') and 'qwen3' in tokenizer.name_or_path.lower():
+                return [{"content": tokenizer.apply_chat_template(messages, tokenize=False, enable_thinking=False)}]
+            else:
+                return [{"content": tokenizer.apply_chat_template(messages, tokenize=False)}]
         
         if sample.get('assistant') is None:
             return []
@@ -536,7 +542,10 @@ def create_chat_data(data_args, tokenizer):
         ]
         if 'None' in sample['assistant']:
             return []
-        return [{"content": tokenizer.apply_chat_template(messages, tokenize=False)}]
+        if hasattr(tokenizer, 'name_or_path') and 'qwen3' in tokenizer.name_or_path.lower():
+            return [{"content": tokenizer.apply_chat_template(messages, tokenize=False, enable_thinking=False)}]
+        else:
+            return [{"content": tokenizer.apply_chat_template(messages, tokenize=False)}]
     
     dataset = load_dataset("json", data_files=data_args.dataset_name, split="train")
     res_dataset = []
@@ -620,11 +629,11 @@ def save_hf_model(model_name=None, log_file_path=None) -> str:
             config = Config()
             model_name = config.get("training", {}).get("model_name")
             if not model_name:
-                logger.warning("No model name provided and none found in config. Using Qwen2.5-0.5B-Instruct as fallback.")
-                model_name = "Qwen2.5-0.5B-Instruct"
+                logger.warning("No model name provided and none found in config. Using Qwen3-0.6B as fallback.")
+                model_name = "Qwen3-0.6B"
         except Exception as e:
-            logger.warning(f"Failed to get model name from config: {str(e)}. Using Qwen2.5-0.5B-Instruct as fallback.")
-            model_name = "Qwen2.5-0.5B-Instruct"
+            logger.warning(f"Failed to get model name from config: {str(e)}. Using Qwen3-0.6B as fallback.")
+            model_name = "Qwen3-0.6B"
     
     base_dir = os.path.join(os.getcwd(), "resources/L2/base_models")
     # Normalize model name and check for path traversal attempts

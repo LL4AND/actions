@@ -84,7 +84,7 @@ EMBEDDING_MAX_TEXT_LENGTH=embedding_model_context_length
 
 ```
 Chat:
-Model Name: qwen2.5:0.5b
+Model Name: qwen2.5:0.6b
 API Key: ollama
 API Endpoint: http://127.0.0.1:11434/v1
 

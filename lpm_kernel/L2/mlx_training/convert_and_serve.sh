@@ -1,4 +1,4 @@
-mlx_lm.fuse --model mlx-community/Qwen2.5-7B-Instruct-4bit \
+mlx_lm.fuse --model mlx-community/Qwen3-8B-4bit \
 --adapter-path "resources/model/output/mlx/adapters" \
 --save-path "resources/model/output/mlx" 
 

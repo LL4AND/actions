@@ -31,7 +31,7 @@ RUN LLAMA_LOCAL_ZIP="dependencies/llama.cpp.zip" \
     && cd llama.cpp \
     && mkdir -p build && cd build \
     && cmake .. \
-    && cmake --build . --config Release \
+    && cmake --build . --config Release -j\
     && if [ ! -f "bin/llama-server" ]; then \
          echo "Build failed: llama-server executable not found" && exit 1; \
        else \
