@@ -1,11 +1,11 @@
 'use client';
 
 import type React from 'react';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Listbox, Transition } from '@headlessui/react';
 import { PlayIcon, StopIcon } from '@heroicons/react/24/outline';
 import { EVENT } from '../../utils/event';
-import { Checkbox, InputNumber, Radio, Spin, Tooltip } from 'antd';
+import { Checkbox, InputNumber, message, Radio, Spin, Tooltip } from 'antd';
 import type { TrainingConfig } from '@/service/train';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import OpenAiModelIcon from '../svgs/OpenAiModelIcon';
@@ -32,14 +32,13 @@ interface TrainingConfigurationProps {
   isTraining: boolean;
   updateTrainingParams: (params: TrainingConfig) => void;
   status: string;
-  isResume: boolean;
+  trainSuspended: boolean;
   handleResetProgress: () => void;
-  nowTrainingParams: TrainingConfig | null;
-  changeBaseModel: boolean;
   handleTrainingAction: () => Promise<void>;
   trainActionLoading: boolean;
   setSelectedInfo: React.Dispatch<React.SetStateAction<boolean>>;
   trainingParams: TrainingConfig;
+  cudaAvailable: boolean;
 }
 
 const synthesisModeOptions = [
@@ -54,19 +53,21 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
   isTraining,
   updateTrainingParams,
   trainingParams,
-  nowTrainingParams,
   status,
   handleResetProgress,
-  isResume,
-  changeBaseModel,
+  trainSuspended,
   trainActionLoading,
   handleTrainingAction,
-  setSelectedInfo
+  setSelectedInfo,
+  cudaAvailable
 }) => {
-  const [disabledChangeParams, setDisabledChangeParams] = useState<boolean>(false);
   const [openThinkingModel, setOpenThinkingModel] = useState<boolean>(false);
   const [showThinkingWarning, setShowThinkingWarning] = useState<boolean>(false);
   const thinkingModelConfig = useModelConfigStore((state) => state.thinkingModelConfig);
+
+  const disabledChangeParams = useMemo(() => {
+    return isTraining || trainSuspended;
+  }, [isTraining, trainSuspended]);
 
   const thinkingConfigComplete = useMemo(() => {
     return (
@@ -79,14 +80,12 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
   const trainButtonText = useMemo(() => {
     return isTraining
       ? 'Stop Training'
-      : !changeBaseModel
-        ? status === 'trained' || status === 'running'
-          ? 'Retrain'
-          : isResume
-            ? 'Resume Training'
-            : 'Start Training'
-        : 'Start Training';
-  }, [isTraining, status, isResume, changeBaseModel]);
+      : status === 'trained'
+        ? 'Retrain'
+        : trainSuspended
+          ? 'Resume Training'
+          : 'Start Training';
+  }, [isTraining, status, trainSuspended]);
 
   const trainButtonIcon = useMemo(() => {
     return isTraining ? (
@@ -99,10 +98,6 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
       <PlayIcon className="h-5 w-5 mr-2" />
     );
   }, [isTraining, trainActionLoading]);
-
-  useEffect(() => {
-    setDisabledChangeParams(isTraining || (isResume && !changeBaseModel));
-  }, [isTraining, isResume, changeBaseModel]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
@@ -158,12 +153,7 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
               </div>
             ) : (
               <div className="flex items-center relative w-full rounded-lg bg-white py-2 text-left">
-                <div
-                  className="flex items-center cursor-pointer"
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent(EVENT.SHOW_MODEL_CONFIG_MODAL));
-                  }}
-                >
+                <div className="flex items-center">
                   <span className="text-sm font-medium text-gray-700">Model Used : &nbsp;</span>
                   {modelConfig.provider_type === 'openai' ? (
                     <OpenAiModelIcon className="h-5 w-5 mr-2 text-green-600" />
@@ -174,10 +164,20 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
                     {modelConfig.provider_type === 'openai' ? 'OpenAI' : 'Custom Model'}
                   </span>
                   <button
-                    className="ml-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors cursor-pointer relative z-10"
+                    className={classNames(
+                      'ml-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors cursor-pointer relative z-10',
+                      disabledChangeParams && 'opacity-50 !cursor-not-allowed'
+                    )}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+
+                      if (disabledChangeParams) {
+                        message.warning('Cancel the current training run to configure the model');
+
+                        return;
+                      }
+
                       window.dispatchEvent(new CustomEvent(EVENT.SHOW_MODEL_CONFIG_MODAL));
                     }}
                   >
@@ -201,11 +201,7 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
                 }
                 optionType="button"
                 options={synthesisModeOptions}
-                value={
-                  disabledChangeParams && nowTrainingParams && !changeBaseModel
-                    ? nowTrainingParams.data_synthesis_mode
-                    : trainingParams.data_synthesis_mode
-                }
+                value={trainingParams.data_synthesis_mode}
               />
 
               <span className="text-xs text-gray-500">
@@ -226,12 +222,17 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
               </span>
             </div>
             <Listbox
-              disabled={isTraining || trainActionLoading}
+              disabled={disabledChangeParams}
               onChange={(value) => updateTrainingParams({ model_name: value })}
               value={trainingParams.model_name}
             >
               <div className="relative mt-1">
-                <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border border-gray-300 focus:outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-300">
+                <Listbox.Button
+                  className={classNames(
+                    'relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border border-gray-300 focus:outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-300',
+                    disabledChangeParams && 'opacity-50 !cursor-not-allowed'
+                  )}
+                >
                   <span className="block truncate">
                     {baseModelOptions.find((option) => option.value === trainingParams.model_name)
                       ?.label || 'Select a model...'}
@@ -313,11 +314,7 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
                       : undefined
                   }
                   step={0.0001}
-                  value={
-                    disabledChangeParams && nowTrainingParams && !changeBaseModel
-                      ? nowTrainingParams.learning_rate
-                      : trainingParams.learning_rate
-                  }
+                  value={trainingParams.learning_rate}
                 />
                 <div className="text-xs text-gray-500">
                   Enter a value between 0.00003 and 0.005 (recommended: 0.0001)
@@ -348,14 +345,10 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
                       : undefined
                   }
                   step={1}
-                  value={
-                    disabledChangeParams && nowTrainingParams && !changeBaseModel
-                      ? nowTrainingParams.number_of_epochs
-                      : trainingParams.number_of_epochs
-                  }
+                  value={trainingParams.number_of_epochs}
                 />
                 <div className="text-xs text-gray-500">
-                  Enter an integer between 1 and 10 (recommended: 2)
+                  Enter an integer between 1 and 10 (recommended: 3)
                 </div>
               </div>
               <div className="flex flex-col gap-2">
@@ -384,14 +377,45 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
                       : undefined
                   }
                   step={1}
-                  value={
-                    disabledChangeParams && nowTrainingParams && !changeBaseModel
-                      ? nowTrainingParams.concurrency_threads
-                      : trainingParams.concurrency_threads
-                  }
+                  value={trainingParams.concurrency_threads}
                 />
                 <div className="text-xs text-gray-500">
                   Enter an integer between 1 and 10 (recommended: 2)
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 mt-4">
+                <div className="flex gap-3 items-center">
+                  <div className="font-medium">Enable CUDA GPU Acceleration</div>
+                  <Tooltip title="When enabled, training will use CUDA GPU acceleration if available on your system. This can significantly speed up training but requires compatible NVIDIA hardware and drivers.">
+                    <QuestionCircleOutlined className="cursor-pointer" />
+                  </Tooltip>
+                </div>
+                <div className="flex items-center">
+                  <label className="inline-flex items-center cursor-pointer relative">
+                    <input
+                      checked={trainingParams.use_cuda}
+                      className="sr-only peer"
+                      disabled={disabledChangeParams || !cudaAvailable}
+                      onChange={(e) => {
+                        updateTrainingParams({ ...trainingParams, use_cuda: e.target.checked });
+                      }}
+                      type="checkbox"
+                    />
+                    <div
+                      className={`w-11 h-6 ${!cudaAvailable ? 'bg-gray-300' : 'bg-gray-200'} peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${cudaAvailable ? 'peer-checked:bg-blue-600' : 'peer-checked:bg-gray-400'}`}
+                    />
+                    <span
+                      className={`ms-3 text-sm font-medium ${!cudaAvailable ? 'text-gray-500' : 'text-gray-700'}`}
+                    >
+                      {trainingParams.use_cuda ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </label>
+                </div>
+                <div className="text-xs text-gray-500">
+                  {cudaAvailable
+                    ? 'Enable for faster training on NVIDIA GPUs.'
+                    : 'CUDA acceleration is not available on this system.'}
                 </div>
               </div>
             </div>
@@ -404,18 +428,17 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
 
             <div className="flex mr-auto gap-2 items-center ">
               <Checkbox
-                checked={
-                  disabledChangeParams && nowTrainingParams && !changeBaseModel
-                    ? nowTrainingParams.is_cot
-                    : trainingParams.is_cot
-                }
+                checked={trainingParams.is_cot}
                 disabled={disabledChangeParams}
                 onChange={(e) => {
                   e.stopPropagation();
 
                   if (!thinkingConfigComplete) {
                     setShowThinkingWarning(true);
-                    setTimeout(() => setShowThinkingWarning(false), 2000);
+
+                    if (!showThinkingWarning) {
+                      setTimeout(() => setShowThinkingWarning(false), 2000);
+                    }
 
                     return;
                   }
@@ -428,14 +451,20 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
                   `text-sm font-medium px-4 py-2 bg-white border rounded-md cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]`,
                   showThinkingWarning
                     ? 'border-red-500 text-red-600 bg-red-50 shadow-[0_0_0_2px_rgba(220,38,38,0.4)] animate-pulse'
-                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50',
+                  disabledChangeParams && 'opacity-50 !cursor-not-allowed'
                 )}
                 onClick={() => {
+                  if (disabledChangeParams) return;
+
                   setOpenThinkingModel(true);
                 }}
               >
-                Thinking Model
+                Thinking Model 
               </div>
+              <Tooltip title="Chain of Thought (CoT) enables the model to perform step-by-step reasoning during training. This improves the quality of responses by allowing the model to 'think' through complex questions before answering, resulting in more accurate and logically coherent outputs.">
+                    <QuestionCircleOutlined className="cursor-pointer ml-2" />
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -451,7 +480,13 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
           {trainButtonText === 'Resume Training' && (
             <button
               className={`inline-flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 border border-transparent text-sm font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
-              onClick={() => handleResetProgress()}
+              onClick={() => {
+                if (!isTraining) {
+                  message.warning('Please do not shutdown your computer during training');
+                }
+
+                handleResetProgress();
+              }}
             >
               <StopIcon className="h-5 w-5 mr-2" />
               Reset Training
@@ -462,7 +497,13 @@ const TrainingConfiguration: React.FC<TrainingConfigurationProps> = ({
             ${!isTraining && !modelConfig?.provider_type ? 'bg-gray-300 hover:bg-gray-400 cursor-not-allowed' : 'cursor-pointer'}
             focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
             disabled={!isTraining && !modelConfig?.provider_type}
-            onClick={handleTrainingAction}
+            onClick={() => {
+              if (!isTraining) {
+                message.warning('Please do not shutdown your computer during training');
+              }
+
+              handleTrainingAction();
+            }}
           >
             {trainButtonIcon}
             {trainButtonText}

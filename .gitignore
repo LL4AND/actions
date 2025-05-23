@@ -27,6 +27,7 @@ data/sqlite/*
 data/uploads/*
 data/progress/*
 lpm_frontend/node_modules
+lpm_frontend/yarn.lock
 
 # L2 Model Storage
 resources/model/output/merged_model/*
@@ -75,3 +76,8 @@ run/*
 .backend.pid
 .frontend.pid
 logs/train/
+llama_cpp_backup/llama.cpp.zip
+scripts/check_cuda_status.ps1
+scripts/test_cuda_detection.bat
+.env
+.gpu_selected

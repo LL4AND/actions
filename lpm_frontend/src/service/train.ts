@@ -9,7 +9,7 @@ interface ProcessInfo {
   pid: string;
 }
 
-interface ServiceStatusRes {
+export interface ServiceStatusRes {
   process_info?: ProcessInfo;
   is_running?: boolean;
 }
@@ -23,8 +23,11 @@ export type StageStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | '
 
 interface TrainStep {
   completed: boolean;
+  current_file?: string;
   name: string;
   status: StepStatus;
+  path?: string;
+  have_output?: boolean;
 }
 
 interface TrainStage {
@@ -34,6 +37,17 @@ interface TrainStage {
   steps: TrainStep[];
   current_step: string | null;
 }
+export interface TrainStepJson {
+  content: object[];
+  file_type: 'json';
+}
+
+export interface TrainStepParquet {
+  columns: string[];
+  content: object[];
+  file_type: 'parquet';
+}
+export type TrainStepOutput = TrainStepJson | TrainStepParquet;
 
 export type StageName =
   | 'downloading_the_base_model'
@@ -65,6 +79,7 @@ export interface TrainingParams {
   data_synthesis_mode?: string;
   learning_rate?: number;
   number_of_epochs?: number;
+  use_cuda?: boolean;
 }
 
 export interface TrainBaseParams {
@@ -136,5 +151,28 @@ export const getTrainingParams = () => {
   return Request<CommonResponse<TrainingConfig>>({
     method: 'get',
     url: `/api/trainprocess/training_params`
+  });
+};
+
+export const checkCudaAvailability = () => {
+  return Request<
+    CommonResponse<{
+      cuda_available: boolean;
+      cuda_info: {
+        device_count?: number;
+        current_device?: number;
+        device_name?: string;
+      };
+    }>
+  >({
+    method: 'get',
+    url: '/api/kernel2/cuda/available'
+  });
+};
+
+export const getStepOutputContent = (stepName: string) => {
+  return Request<CommonResponse<TrainStepOutput>>({
+    method: 'get',
+    url: `/api/trainprocess/step_output_content?step_name=${stepName}`
   });
 };

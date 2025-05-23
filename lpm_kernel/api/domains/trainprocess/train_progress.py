@@ -19,7 +19,10 @@ class TrainProgress:
                         {
                             "name": "Model Download",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": False,
+                            "path": None,
+                            "current_file":None
                         }
                     ]
                 },
@@ -32,22 +35,30 @@ class TrainProgress:
                         {
                             "name": "List Documents",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": False,
+                            "path": None
                         },
                         {
                             "name": "Generate Document Embeddings",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": False,
+                            "path": None
                         },
                         {
                             "name": "Process Chunks",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": False,
+                            "path": None
                         },
                         {
                             "name": "Chunk Embedding",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": False,
+                            "path": None
                         }
                     ]
                 },
@@ -60,17 +71,23 @@ class TrainProgress:
                         {
                             "name": "Extract Dimensional Topics",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": True,
+                            "path": "resources/L2/data_pipeline/raw_data/topics.json"
                         },
                         {
                             "name": "Generate Biography",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": True,
+                            "path": "From database"
                         },
                         {
                             "name": "Map Your Entity Network",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": True,
+                            "path": "resources/L1/graphrag_indexing_output/subjective/entities.parquet"
                         }
                     ]
                 },
@@ -83,17 +100,23 @@ class TrainProgress:
                         {
                             "name": "Decode Preference Patterns",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": True,
+                            "path": "resources/L2/data/preference.json"
                         },
                         {
                             "name": "Reinforce Identity",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": True,
+                            "path": "resources/L2/data/selfqa.json"
                         },
                         {
                             "name": "Augment Content Retention",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": True,
+                            "path": "resources/L2/data/diversity.json"
                         }
                     ]
                 },
@@ -106,17 +129,23 @@ class TrainProgress:
                         {
                             "name": "Train",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": False,
+                            "path": None
                         },
                         {
                             "name": "Merge Weights",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": False,
+                            "path": None
                         },
                         {
                             "name": "Convert Model",
                             "completed": False,
-                            "status": "pending"
+                            "status": "pending",
+                            "have_output": False,
+                            "path": None
                         }
                     ]
                 }
@@ -140,13 +169,14 @@ class TrainProgress:
                 step_name = step["name"].lower().replace(" ", "_")
                 self.steps_map[stage_name][step_name] = step
 
-    def update_progress(self, stage: str, step: str, currentStepStatus: Union[Status, str], stageProgress: Optional[float] = None):
+    def update_progress(self, stage: str, step: str, currentStepStatus: Union[Status, str], stageProgress: Optional[float] = None, file_name: Optional[str] = None):
         """Update progress status
         Args:
             stage: Stage key (snake_case format)
             step: Step key (snake_case format)
             currentStepStatus: Status (enum or string)
             stageProgress: Optional progress value (0-100)
+            file_name: Optional name of the file being processed (for download tracking)
         """
         stage_data = self.stage_map[stage]
         status_value = currentStepStatus.value if isinstance(currentStepStatus, Status) else currentStepStatus
@@ -155,6 +185,10 @@ class TrainProgress:
         # Update step status
         step_data["status"] = status_value
         step_data["completed"] = status_value == "completed"
+        
+        # Update file name if provided (for tracking downloads)
+        if file_name is not None:
+            step_data["current_file"] = file_name
         
         # Update stage progress
         self._update_stage_progress(stage_data, stageProgress)

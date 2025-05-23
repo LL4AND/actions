@@ -4,7 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import InfoModal from '@/components/InfoModal';
 import type { TrainingConfig } from '@/service/train';
-import { startTrain, stopTrain, retrain, getTrainingParams, resetProgress } from '@/service/train';
+import {
+  startTrain,
+  stopTrain,
+  retrain,
+  getTrainingParams,
+  checkCudaAvailability,
+  resetProgress
+} from '@/service/train';
 import { useTrainingStore } from '@/store/useTrainingStore';
 import { getMemoryList } from '@/service/memory';
 import { message, Modal } from 'antd';
@@ -73,35 +80,53 @@ export default function TrainingPage() {
   const modelConfig = useModelConfigStore((store) => store.modelConfig);
   const status = useTrainingStore((state) => state.status);
   const trainingProgress = useTrainingStore((state) => state.trainingProgress);
+  const serviceStarted = useTrainingStore((state) => state.serviceStarted);
 
   const router = useRouter();
 
   const [selectedInfo, setSelectedInfo] = useState<boolean>(false);
-  const [isTraining, setIsTraining] = useState(false);
+  const isTraining = useTrainingStore((state) => state.isTraining);
+  const setIsTraining = useTrainingStore((state) => state.setIsTraining);
   const [trainingParams, setTrainingParams] = useState<TrainingConfig>({} as TrainingConfig);
-  const [nowTrainingParams, setNowTrainingParams] = useState<TrainingConfig | null>(null);
   const [trainActionLoading, setTrainActionLoading] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
-  const [changeBaseModel, setChangeBaseModel] = useState(false);
 
   const cleanupEventSourceRef = useRef<(() => void) | undefined>();
   const containerRef = useRef<HTMLDivElement>(null);
   const firstLoadRef = useRef<boolean>(true);
   const pollingStopRef = useRef<boolean>(false);
 
-  const [isResume, setIsResume] = useState(
-    trainingProgress.status === 'suspended' || trainingProgress.status === 'failed'
-  );
-
-  useEffect(() => {
-    const localTrainingParams = JSON.parse(localStorage.getItem('trainingParams') || '{}');
-
-    setChangeBaseModel(localTrainingParams?.model_name !== trainingParams.model_name);
-  }, [trainingParams.model_name]);
+  const [cudaAvailable, setCudaAvailable] = useState<boolean>(false);
+  const trainSuspended = useTrainingStore((state) => state.trainSuspended);
+  const setTrainSuspended = useTrainingStore((state) => state.setTrainSuspended);
 
   useEffect(() => {
     fetchModelConfig();
+  }, []);
+
+  useEffect(() => {
+    // Check CUDA availability once on load
+    checkCudaAvailability()
+      .then((res) => {
+        if (res.data.code === 0) {
+          const { cuda_available, cuda_info } = res.data.data;
+
+          setCudaAvailable(cuda_available);
+
+          if (cuda_available) {
+            console.log('CUDA is available:', cuda_info);
+          } else {
+            console.log('CUDA is not available on this system');
+          }
+        } else {
+          message.error(res.data.message || 'Failed to check CUDA availability');
+        }
+      })
+      .catch((err) => {
+        console.error('CUDA availability check failed', err);
+        message.error('CUDA availability check failed');
+      });
   }, []);
 
   // Start polling training progress
@@ -140,10 +165,6 @@ export default function TrainingPage() {
   const stopPolling = () => {
     pollingStopRef.current = true;
   };
-
-  useEffect(() => {
-    setIsResume(trainingProgress.status === 'suspended' || trainingProgress.status === 'failed');
-  }, [trainingProgress]);
 
   useEffect(() => {
     if (status === 'trained' || trainingError) {
@@ -195,9 +216,6 @@ export default function TrainingPage() {
     if (trainingProgress.status === 'in_progress') {
       setIsTraining(true);
 
-      // Create EventSource connection to get logs
-      updateTrainLog();
-
       if (firstLoadRef.current) {
         scrollPageToBottom();
 
@@ -213,18 +231,14 @@ export default function TrainingPage() {
     ) {
       stopPolling();
       setIsTraining(false);
-
-      // Keep EventSource open to preserve received logs
-      // If resource cleanup is needed, EventSource could be closed here
     }
-
-    // Return cleanup function to ensure EventSource is closed when component unmounts or dependencies change
-    return () => {
-      if (cleanupEventSourceRef.current) {
-        cleanupEventSourceRef.current();
-      }
-    };
   }, [trainingProgress]);
+
+  useEffect(() => {
+    if (isTraining) {
+      updateTrainLog();
+    }
+  }, [isTraining]);
 
   // Cleanup when component unmounts
   useEffect(() => {
@@ -243,7 +257,6 @@ export default function TrainingPage() {
           const data = res.data.data;
 
           setTrainingParams(data);
-          setNowTrainingParams(data);
 
           localStorage.setItem('trainingParams', JSON.stringify(data));
         } else {
@@ -277,42 +290,30 @@ export default function TrainingPage() {
 
   const getDetails = () => {
     // Use EventSource to get logs
-    const eventSource = new EventSource('/api/trainprocess/logs');
+    const eventSource = new EventSource(`/api/trainprocess/logs`);
 
     eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
+      // Don't try to parse as JSON, just use the raw text data directly
+      const logMessage = event.data;
 
-        setTrainingDetails((prev) => {
-          const newLogs = [
-            ...prev.slice(-100),
-            {
-              message: data.message,
-              timestamp: new Date().toISOString()
-            }
-          ];
+      setTrainingDetails((prev) => {
+        const newLogs = [
+          ...prev.slice(-500), // Keep more log entries (500 instead of 100)
+          {
+            message: logMessage,
+            timestamp: new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            })
+          }
+        ];
 
-          // Save logs to localStorage
-          // localStorage.setItem('trainingLogs', JSON.stringify(newLogs));
+        // Save logs to localStorage for persistence between page refreshes
+        localStorage.setItem('trainingLogs', JSON.stringify(newLogs));
 
-          return newLogs;
-        });
-      } catch {
-        setTrainingDetails((prev) => {
-          const newLogs = [
-            ...prev.slice(-100),
-            {
-              message: event.data,
-              timestamp: new Date().toISOString()
-            }
-          ];
-
-          // Save logs to localStorage
-          // localStorage.setItem('trainingLogs', JSON.stringify(newLogs));
-
-          return newLogs;
-        });
-      }
+        return newLogs;
+      });
     };
 
     eventSource.onerror = (error) => {
@@ -340,7 +341,7 @@ export default function TrainingPage() {
 
       if (res.data.code === 0) {
         setIsTraining(false);
-        setIsResume(true);
+        setTrainSuspended(true);
       } else {
         message.error(res.data.message || 'Failed to stop training');
       }
@@ -356,10 +357,9 @@ export default function TrainingPage() {
     resetProgress()
       .then((res) => {
         if (res.data.code === 0) {
-          setTrainingParams(nowTrainingParams || ({} as TrainingConfig));
-          setNowTrainingParams(null);
-          setIsResume(false);
+          setTrainSuspended(false);
           resetTrainingState();
+          localStorage.removeItem('trainingLogs');
         } else {
           throw new Error(res.data.message || 'Failed to reset progress');
         }
@@ -382,18 +382,15 @@ export default function TrainingPage() {
     resetTrainingState();
 
     try {
-      setNowTrainingParams(trainingParams);
-
       console.log('Using startTrain API to train new model:', trainingParams.model_name);
       const res = await startTrain({
-        ...(isResume && !changeBaseModel ? {} : trainingParams),
+        ...trainingParams,
         model_name: trainingParams.model_name
       });
 
       if (res.data.code === 0) {
         // Save training configuration and start polling
         localStorage.setItem('trainingParams', JSON.stringify(trainingParams));
-        setChangeBaseModel(false);
         scrollPageToBottom();
         startGetTrainingProgress();
       } else {
@@ -403,7 +400,6 @@ export default function TrainingPage() {
     } catch (error: unknown) {
       console.error('Error starting training:', error);
       setIsTraining(false);
-      setNowTrainingParams(null);
 
       if (error instanceof Error) {
         message.error(error.message || 'Failed to start training');
@@ -454,6 +450,12 @@ export default function TrainingPage() {
       return;
     }
 
+    if (!isTraining && serviceStarted) {
+      message.error('Model is already running, please stop it first');
+
+      return;
+    }
+
     setTrainActionLoading(true);
 
     // If training is in progress, stop it
@@ -465,7 +467,7 @@ export default function TrainingPage() {
     }
 
     // If the same model has already been trained and status is 'trained' or 'running', perform retraining
-    if (!changeBaseModel && (status === 'trained' || status === 'running')) {
+    if (status === 'trained') {
       await handleRetrainModel();
     } else {
       // Otherwise start new training
@@ -523,23 +525,21 @@ export default function TrainingPage() {
         {/* Training Configuration Component */}
         <TrainingConfiguration
           baseModelOptions={baseModelOptions}
-          changeBaseModel={changeBaseModel}
+          cudaAvailable={cudaAvailable}
           handleResetProgress={handleResetProgress}
           handleTrainingAction={handleTrainingAction}
-          isResume={isResume}
           isTraining={isTraining}
           modelConfig={modelConfig}
-          nowTrainingParams={nowTrainingParams}
           setSelectedInfo={setSelectedInfo}
           status={status}
           trainActionLoading={trainActionLoading}
+          trainSuspended={trainSuspended}
           trainingParams={trainingParams}
           updateTrainingParams={updateTrainingParams}
         />
 
         {/* Only show training progress after training starts */}
-        {(status === 'training' || status === 'trained' || status === 'running') &&
-          renderTrainingProgress()}
+        {(status === 'training' || status === 'trained') && renderTrainingProgress()}
 
         {/* Always show training log regardless of training status */}
         {renderTrainingLog()}

@@ -1,4 +1,8 @@
 import type { TrainProgress } from '@/service/train';
+import type { IStepOutputInfo } from '../trainExposureModel';
+import TrainExposureModel from '../trainExposureModel';
+import { useState } from 'react';
+import classNames from 'classnames';
 
 interface TrainingProgressProps {
   trainingProgress: TrainProgress;
@@ -16,6 +20,8 @@ const descriptionMap = [
 const TrainingProgress = (props: TrainingProgressProps) => {
   const { trainingProgress, status } = props;
 
+  const [stepOutputInfo, setStepOutputInfo] = useState<IStepOutputInfo>({} as IStepOutputInfo);
+
   const formatUnderscoreToName = (_str: string) => {
     const str = _str || '';
 
@@ -24,6 +30,13 @@ const TrainingProgress = (props: TrainingProgressProps) => {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
+
+  const formatToUnderscore = (str: string): string => {
+    if (!str) return '';
+
+    return str.toLowerCase().replace(/\s+/g, '_');
+  };
+
   const trainingStages = trainingProgress.stages.map((stage, index) => {
     return { ...stage, description: descriptionMap[index] };
   });
@@ -34,7 +47,7 @@ const TrainingProgress = (props: TrainingProgressProps) => {
         <h3 className="text-lg font-medium text-gray-900">
           Training Progress (may take long with more data and larger model)
         </h3>
-        {(status === 'trained' || status === 'running') && (
+        {status === 'trained' && (
           <span className="px-2.5 py-1 bg-green-50 text-green-700 text-sm font-medium rounded-full">
             Training Complete
           </span>
@@ -220,15 +233,43 @@ const TrainingProgress = (props: TrainingProgressProps) => {
                               )}
                             </div>
                             <span
-                              className={`text-xs ${
+                              className={classNames(
+                                'text-xs',
                                 stage.current_step &&
-                                formatUnderscoreToName(stage.current_step) == step.name
+                                  formatUnderscoreToName(stage.current_step) == step.name
                                   ? 'text-blue-600 font-medium'
                                   : 'text-gray-600'
-                              }`}
+                                // step.completed ? 'hover:text-green-600 cursor-pointer' : ''
+                              )}
                             >
                               {step.name}
                             </span>
+
+                            {/* Current downloading file name */}
+                            {step.name === 'Model Download' &&
+                            step.status !== 'completed' &&
+                            !!step.current_file ? (
+                              <span
+                                className={classNames('text-xs ml-2', 'text-blue-600 font-medium')}
+                              >
+                                <span className="mr-2">{'-'}</span>
+                                <span>{step.current_file}</span>
+                              </span>
+                            ) : null}
+
+                            {step.completed && step.have_output && (
+                              <span
+                                className="text-xs text-blue-500 underline cursor-pointer hover:text-blue-600"
+                                onClick={() => {
+                                  setStepOutputInfo({
+                                    stepName: formatToUnderscore(step.name),
+                                    path: step.path
+                                  });
+                                }}
+                              >
+                                View Resources
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -242,6 +283,11 @@ const TrainingProgress = (props: TrainingProgressProps) => {
           </div>
         </div>
       </div>
+
+      <TrainExposureModel
+        handleClose={() => setStepOutputInfo({} as IStepOutputInfo)}
+        stepOutputInfo={stepOutputInfo}
+      />
     </div>
   );
 };

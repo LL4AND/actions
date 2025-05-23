@@ -137,7 +137,7 @@ export default function TrainPage() {
   };
 
   const handleDeleteMemory = async (id: string, name: string) => {
-    const res = await deleteMemory(name);
+    const res = await deleteMemory(id);
 
     if (res.data.code === 0) {
       setMemories((prev) => {
@@ -217,7 +217,6 @@ export default function TrainPage() {
       </div>
 
       <InfoModal
-        open={!!selectedInfo && !!trainSectionInfo[selectedInfo]}
         content={
           selectedInfo ? (
             <div className="space-y-4">
@@ -236,6 +235,7 @@ export default function TrainPage() {
           ) : null
         }
         onClose={() => setSelectedInfo(null)}
+        open={!!selectedInfo && !!trainSectionInfo[selectedInfo]}
         title={selectedInfo ? trainSectionInfo[selectedInfo].name : ''}
       />
     </>

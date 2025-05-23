@@ -1,19 +1,45 @@
 import { create } from 'zustand';
-import { getTrainProgress, type TrainProgress } from '@/service/train';
+import {
+  getServiceStatus,
+  getTrainProgress,
+  type TrainProgress,
+  type ServiceStatusRes
+} from '@/service/train';
+import type { CommonResponse } from '@/types/responseModal';
 
-export type ModelStatus = 'seed_identity' | 'memory_upload' | 'training' | 'trained' | 'running';
+export type ModelStatus = 'seed_identity' | 'memory_upload' | 'training' | 'trained';
+
+export enum Status {
+  SEED_IDENTITY = 'seed_identity',
+  MEMORY_UPLOAD = 'memory_upload',
+  TRAINING = 'training',
+  TRAINED = 'trained'
+}
+
+export const statusRankMap = {
+  [Status.SEED_IDENTITY]: 0,
+  [Status.MEMORY_UPLOAD]: 1,
+  [Status.TRAINING]: 2,
+  [Status.TRAINED]: 2
+};
 
 interface ModelState {
   status: ModelStatus;
   error: boolean;
+  isTraining: boolean;
+  serviceStarted: boolean;
   isServiceStarting: boolean;
   isServiceStopping: boolean;
   trainingProgress: TrainProgress;
+  trainSuspended: boolean;
   setStatus: (status: ModelStatus) => void;
   setError: (error: boolean) => void;
+  setIsTraining: (isTraining: boolean) => void;
+  fetchServiceStatus: () => Promise<CommonResponse<ServiceStatusRes>>;
   setServiceStarting: (isStarting: boolean) => void;
   setServiceStopping: (isStopping: boolean) => void;
   setTrainingProgress: (progress: TrainProgress) => void;
+  setTrainSuspended: (suspended: boolean) => void;
   checkTrainStatus: () => Promise<void>;
   resetTrainingState: () => void;
 }
@@ -77,17 +103,46 @@ const defaultTrainingProgress: TrainProgress = {
   status: 'pending'
 };
 
-export const useTrainingStore = create<ModelState>((set) => ({
+export const useTrainingStore = create<ModelState>((set, get) => ({
   status: 'seed_identity',
+  isTraining: false,
+  serviceStarted: false,
   isServiceStarting: false,
   isServiceStopping: false,
   error: false,
   trainingProgress: defaultTrainingProgress,
-  setStatus: (status) => set({ status }),
+  trainSuspended: false,
+  setStatus: (status) => {
+    const preStatus = get().status;
+
+    //Only trained and running can be interchanged.
+    if (statusRankMap[status] < statusRankMap[preStatus]) {
+      return;
+    }
+
+    set({ status });
+  },
+  fetchServiceStatus: () => {
+    return getServiceStatus().then((res) => {
+      if (res.data.code === 0) {
+        const isRunning = res.data.data.is_running;
+
+        if (isRunning) {
+          set({ serviceStarted: true });
+        } else {
+          set({ serviceStarted: false });
+        }
+      }
+
+      return res;
+    });
+  },
   setError: (error) => set({ error }),
+  setIsTraining: (isTraining) => set({ isTraining }),
   setServiceStarting: (isStarting) => set({ isServiceStarting: isStarting }),
   setServiceStopping: (isStopping) => set({ isServiceStopping: isStopping }),
   setTrainingProgress: (progress) => set({ trainingProgress: progress }),
+  setTrainSuspended: (suspended) => set({ trainSuspended: suspended }),
   resetTrainingState: () => set({ trainingProgress: defaultTrainingProgress }),
   checkTrainStatus: async () => {
     const config = JSON.parse(localStorage.getItem('trainingParams') || '{}');
@@ -101,7 +156,7 @@ export const useTrainingStore = create<ModelState>((set) => ({
 
       if (res.data.code === 0) {
         const data = res.data.data;
-        const { overall_progress } = data;
+        const { overall_progress, status } = data;
 
         const newProgress = data;
 
@@ -110,18 +165,14 @@ export const useTrainingStore = create<ModelState>((set) => ({
         }
 
         set((state) => {
-          // If current status is running, keep it unchanged
-          if (state.status === 'running') {
-            return {
-              ...state,
-              trainingProgress: newProgress
-            };
-          }
-
           const newState = {
             ...state,
             trainingProgress: newProgress
           };
+
+          if (status === 'suspended' || status === 'failed') {
+            newState.trainSuspended = true;
+          }
 
           // If total progress is 100%, set status to trained
           if (overall_progress === 100) {

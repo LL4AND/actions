@@ -22,7 +22,8 @@ class TrainingParamsManager:
         "learning_rate": 1e-4,
         "number_of_epochs": 3,
         "concurrency_threads": 2,
-        "data_synthesis_mode": "low",
+        "data_synthesis_mode": "high",
+        "use_cuda": False,  # Default to using CUDA when available
         "is_cot": False
     }
     
@@ -44,15 +45,16 @@ class TrainingParamsManager:
         return cls._params_file_path
     
     @classmethod
-    def update_training_params(cls, params):
+    def update_training_params(cls, params, use_previous_params=True):
         """
         Update the latest training parameters and save to file
         
         Args:
             params: Dictionary containing training parameters
+            use_previous_params: Whether to use previous training parameters as base
         """
         # First try to load existing parameters
-        current_params = cls.get_latest_training_params()
+        current_params = cls.get_latest_training_params() if use_previous_params else cls._default_training_params.copy()
         
         # Update parameters
         for key, value in params.items():

@@ -53,8 +53,18 @@ class PreferenceQAGenerator:
             bio: Biography or context information to use in prompt generation.
             preference_language: Language for prompts ("Chinese/中文" or otherwise English).
         """
+        # Ensure the filename is actually a string
+        if filename is None:
+            raise ValueError("Filename cannot be None")
+            
         self.filename = filename
-        self.is_cot = is_cot
+        # Convert is_cot to bool if it's a string
+        if isinstance(is_cot, str):
+            self.is_cot = is_cot.lower() == 'true'
+        else:
+            self.is_cot = bool(is_cot)
+            
+        logger.info(f"PreferenceQAGenerator initialized with is_cot={self.is_cot}")
         
         with open(self.filename, "r", encoding="utf-8") as f:
             self.pre_msg = json.load(f)
@@ -76,7 +86,7 @@ class PreferenceQAGenerator:
             self.model_name = user_llm_config.thinking_model_name
             self.api_key = user_llm_config.thinking_api_key
             self.base_url = user_llm_config.thinking_endpoint
-            if self.model_name.startswith("deepseek"):
+            if "deepseek" in self.model_name:
                 self.client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url)
             else:
                 logger.error(f"Error model_name, longcot data generating model_name: deepseek series")
@@ -92,7 +102,7 @@ class PreferenceQAGenerator:
         self.data_synthesis_mode = os.environ.get("DATA_SYNTHESIS_MODE", "low")
 
 
-    def generate_response(self, sys: str, prompt: str) -> str:
+    def generate_response(self, sys: str, prompt: str, mode: str) -> str:
         """Generate a response using the OpenAI / DeepSeek API.
         
         Args:
@@ -102,7 +112,7 @@ class PreferenceQAGenerator:
         Returns:
             The generated response text or None if an error occurred.
         """
-        def get_remote_response(sys: str, prompt: str) -> str:
+        def get_remote_response(sys: str, prompt: str, mode: str) -> str:
             """Get response from OpenAI / DeepSeek API.
             
             Args:
@@ -120,11 +130,39 @@ class PreferenceQAGenerator:
                         ],
                     model=self.model_name,
                 )
-                response_message = res.choices[0].message
-                if self.is_cot:
-                    return "<think>" + response_message.reasoning_content + "</think>" + response_message.content
+                result = res.choices[0].message
+                if self.is_cot and mode == "answer":
+                    if hasattr(result, 'reasoning_content'):
+                        if not result.reasoning_content.startswith("<think>"):
+                            reasoning_content = f"<think>{result.reasoning_content}"
+                            if not result.reasoning_content.endswith("</think>"):
+                                reasoning_content += "</think>"
+                        else:
+                            reasoning_content = result.reasoning_content
+                        if not result.content.strip().startswith("<answer>"):
+                            content = f"<answer>{result.content.strip()}"
+                            if not result.content.strip().endswith("</answer>"):
+                                content += "</answer>"
+                        else:
+                            content = result.content
+                    else:
+                        if not result.content.startswith("<answer>"):
+                            reasoning_content, content = result.content.split("</think>")
+                            if result.content.startswith("<think>"):
+                                reasoning_content += "</think>"
+                            else:
+                                reasoning_content = f"<think>{reasoning_content}</think>"
+                            if not content.strip().startswith("<answer>"):
+                                content = f"<answer>{content.strip()}</answer>"
+                            else:
+                                content = content.strip()
+                        else:
+                            reasoning_content = ""
+                            content = result.content
+                    final_result = reasoning_content + "\n" + content
                 else:
-                    return response_message.content
+                    final_result = result.content
+                return final_result
             except Exception as e:
                 logger.error(traceback.format_exc())
             return None
@@ -132,16 +170,9 @@ class PreferenceQAGenerator:
         
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                future = executor.submit(
-                    self.client.chat.completions.create,
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": sys},
-                        {"role": "user", "content": prompt},
-                    ],
-                )
+                future = executor.submit(get_remote_response, sys, prompt, mode)
                 response = future.result()
-                return response.choices[0].message.content
+                return response
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             return None
@@ -245,10 +276,13 @@ class PreferenceQAGenerator:
                     prompt_question_template.format(
                         bio=self.bio, chunks_concat=chunk_concat
                     ),
+                    mode="question"
                 )
                 if self.is_cot:
                     question_match = re.search(r"<question>(.*?)</question>", gen_question, re.DOTALL)
                     gen_question = question_match.group(1).strip() if question_match else gen_question
+                    if "<think>" in gen_question:
+                        gen_question = gen_question.split("</think>")[1].strip()
             except Exception as e:
                 logger.error(traceback.format_exc())
                 continue
@@ -258,6 +292,7 @@ class PreferenceQAGenerator:
                     prompt_answer_template.format(
                         question=gen_question, bio=self.bio, chunks_concat=chunk_concat
                     ),
+                    mode="answer"
                 )
             except Exception as e:
                 logger.error(traceback.format_exc())
@@ -325,6 +360,7 @@ class PreferenceQAGenerator:
                     prompt_question_template.format(
                         bio=self.bio, chunks_concat=chunk_concat
                     ),
+                    mode="question"
                 )
                 if self.is_cot:
                     question_match = re.search(r"<question>(.*?)</question>", gen_question, re.DOTALL)
@@ -334,6 +370,7 @@ class PreferenceQAGenerator:
                     prompt_answer_template.format(
                         question=gen_question, chunks_concat=chunk_concat, bio=self.bio
                     ),
+                    mode="answer"
                 )
             except Exception as e:
                 logger.error(traceback.format_exc())

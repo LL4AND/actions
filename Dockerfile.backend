@@ -19,6 +19,11 @@ RUN mkdir -p /app/dependencies /app/data/sqlite /app/data/chroma_db /app/logs /a
 COPY dependencies/graphrag-1.2.1.dev27.tar.gz /app/dependencies/
 COPY dependencies/llama.cpp.zip /app/dependencies/
 
+# Copy GPU checker script (only used for status reporting, not rebuilding)
+COPY docker/app/check_gpu_support.sh /app/
+COPY docker/app/check_torch_cuda.py /app/
+RUN chmod +x /app/check_gpu_support.sh
+
 # Build llama.cpp
 RUN LLAMA_LOCAL_ZIP="dependencies/llama.cpp.zip" \
     && echo "Using local llama.cpp archive..." \
@@ -33,7 +38,11 @@ RUN LLAMA_LOCAL_ZIP="dependencies/llama.cpp.zip" \
          echo "Successfully built llama-server"; \
        fi
 
-# 
+# Mark as CPU-only build for runtime reference
+RUN mkdir -p /app/data && \
+    echo "{ \"gpu_optimized\": false, \"optimized_on\": \"$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\" }" > /app/data/gpu_optimized.json && \
+    echo "Created CPU-only marker file"
+
 # Copy project configuration - Files that occasionally change
 COPY pyproject.toml README.md /app/
 
