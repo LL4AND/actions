@@ -423,28 +423,27 @@ class LoadService:
 
     @staticmethod
     def _reset_training_progress() -> None:
-        """Reset training progress objects in memory"""
+        """重置内存中的训练进度对象"""
         try:
-            # Get all possible training progress file patterns
+            from lpm_kernel.api.domains.trainprocess.trainprocess_service import TrainProcessService
+            import os
+            # 获取所有可能的训练进度文件模式
             base_dir = os.getenv('LOCAL_BASE_DIR', '.')
             progress_dir = os.path.join(base_dir, 'data', 'progress')
             if os.path.exists(progress_dir):
                 for file in os.listdir(progress_dir):
                     if file.startswith('trainprocess_progress_'):
-                        # Extract model name
+                        # 提取模型名称
                         model_name = file.replace('trainprocess_progress_', '').replace('.json', '')
-                        # Create a new service instance for each model and reset progress
+                        # 为每个模型创建新的服务实例并重置进度
                         train_service = TrainProcessService(current_model_name=model_name)
                         train_service.progress.reset_progress()
                         logger.info(f"Reset training progress for model: {model_name}")
-            
-            # Reset default training progress
+            # 重置默认训练进度
             default_train_service = TrainProcessService.get_instance()
             if default_train_service is not None:
                 default_train_service.progress.reset_progress()
-            
             logger.info("Reset default training progress")
-            
         except Exception as e:
             logger.error(f"Failed to reset training progress objects: {str(e)}")
 

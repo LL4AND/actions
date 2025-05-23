@@ -1,39 +1,45 @@
 import os
 import re
 import time
+import threading
+import gc
+import subprocess
 import psutil
-from typing import Optional, Dict
+import json
+from enum import Enum
+from typing import Dict, List, Optional
+
+from lpm_kernel.configs.config import Config
+from lpm_kernel.configs.logging import get_train_process_logger, TRAIN_LOG_FILE
 from lpm_kernel.L1.utils import save_true_topics
 from lpm_kernel.L1.serializers import NotesStorage
 from lpm_kernel.kernel.note_service import NoteService
 from lpm_kernel.L2.l2_generator import L2Generator
 from lpm_kernel.L2.utils import save_hf_model
 from lpm_kernel.api.common.responses import APIResponse
+from lpm_kernel.api.common.script_executor import ScriptExecutor
 from lpm_kernel.api.domains.loads.services import LoadService
+from lpm_kernel.api.domains.trainprocess.progress_enum import Status
+from lpm_kernel.api.domains.trainprocess.train_progress import TrainProgress
+from lpm_kernel.api.domains.trainprocess.process_step import ProcessStep
+from lpm_kernel.api.domains.trainprocess.progress_holder import TrainProgressHolder
+from lpm_kernel.api.domains.kernel.routes import store_l1_data
+from lpm_kernel.train.training_params_manager import TrainingParamsManager
+from lpm_kernel.common.repository.database_session import DatabaseSession
+from lpm_kernel.backup.auto_backup import AutoBackupManager
 from lpm_kernel.kernel.chunk_service import ChunkService
 from lpm_kernel.kernel.l1.l1_manager import (
     extract_notes_from_documents,
     document_service,
     get_latest_status_bio,
     get_latest_global_bio,
+    generate_l1_from_l0,
 )
-from lpm_kernel.api.common.script_executor import ScriptExecutor
-from lpm_kernel.configs.config import Config
 from lpm_kernel.file_data.chunker import DocumentChunker
-from lpm_kernel.kernel.l1.l1_manager import generate_l1_from_l0
-import threading
-from lpm_kernel.api.domains.trainprocess.progress_enum import Status
-from lpm_kernel.api.domains.trainprocess.process_step import ProcessStep
-from lpm_kernel.api.domains.trainprocess.progress_holder import TrainProgressHolder
-from lpm_kernel.api.domains.trainprocess.training_params_manager import TrainingParamsManager
 from lpm_kernel.models.l1 import L1Bio, L1Shade
-from lpm_kernel.common.repository.database_session import DatabaseSession
-from lpm_kernel.api.domains.kernel.routes import store_l1_data
 from lpm_kernel.api.domains.trainprocess.L1_exposure_manager import output_files, query_l1_version_data, read_file_content
-import gc
-import subprocess
-from lpm_kernel.configs.logging import get_train_process_logger, TRAIN_LOG_FILE
 logger = get_train_process_logger()
+
 
 class TrainProcessService:
     """Training process service (singleton pattern)"""
@@ -46,9 +52,9 @@ class TrainProcessService:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, current_model_name: str):
-        if current_model_name is None:
-            raise ValueError("current_model_name cannot be None")
+    def __init__(self, current_model_name: str = None):
+        if current_model_name is None and not self._initialized:
+            raise ValueError("current_model_name cannot be None when initializing")
             
         if not self._initialized:
             # Generate a unique progress file name based on model name
@@ -73,7 +79,7 @@ class TrainProcessService:
             self.l2_data_prepared = False
         
         # Update model name and progress instance if model name changes
-        if current_model_name != self.model_name:
+        if current_model_name is not None and current_model_name != self.model_name:
             self.model_name = current_model_name
             # Create new progress instance with updated progress file name
             self.progress = TrainProgressHolder(current_model_name)
@@ -426,6 +432,189 @@ class TrainProcessService:
                 self.l2_data["config_path"]
             )
             l2_generator.merge_json_files(self.l2_data["data_output_base_dir"])
+<<<<<<< HEAD
+            
+            self.progress.mark_step_status(ProcessStep.AUGMENT_CONTENT_RETENTION, Status.COMPLETED)
+            logger.info("Content retention augmentation completed successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Augment content retention failed: {str(e)}")
+            self.progress.mark_step_status(ProcessStep.AUGMENT_CONTENT_RETENTION, Status.FAILED)
+            return False
+
+    def _prepare_l2_data(self):
+        """Prepare L2 data for training"""
+        if self.l2_data_prepared:
+            logger.info("L2 data already prepared, skipping preparation")
+            return
+            
+        try:
+            logger.info("Preparing L2 data...")
+            
+            # Get notes from database
+            note_service = NoteService()
+            notes = note_service.get_all_notes()
+            
+            # Get basic info
+            status_bio = get_latest_status_bio()
+            global_bio = get_latest_global_bio()
+            
+            # Combine into basic info dictionary
+            basic_info = {
+                "status_bio": status_bio,
+                "global_bio": global_bio
+            }
+            
+            # Create output directory
+            data_output_base_dir = os.path.join(os.getcwd(), "data", "l2_data")
+            os.makedirs(data_output_base_dir, exist_ok=True)
+            
+            # Set paths for L2 data
+            topics_path = os.path.join(data_output_base_dir, "topics.json")
+            entitys_path = os.path.join(data_output_base_dir, "entitys.json")
+            graph_path = os.path.join(data_output_base_dir, "graph.json")
+            config_path = os.path.join(data_output_base_dir, "config.json")
+            
+            # Store in l2_data dictionary
+            self.l2_data["notes"] = notes
+            self.l2_data["basic_info"] = basic_info
+            self.l2_data["data_output_base_dir"] = data_output_base_dir
+            self.l2_data["topics_path"] = topics_path
+            self.l2_data["entitys_path"] = entitys_path
+            self.l2_data["graph_path"] = graph_path
+            self.l2_data["config_path"] = config_path
+            
+            self.l2_data_prepared = True
+            logger.info("L2 data preparation completed successfully")
+            
+        except Exception as e:
+            logger.error(f"L2 data preparation failed: {str(e)}")
+            self._cleanup_resources()
+            raise
+
+    def _monitor_model_download(self):
+        """Monitor model download progress"""
+        try:
+            logger.info("Starting model download monitoring...")
+            
+            # Check every 5 seconds
+            while True:
+                # Sleep first to give download time to start
+                time.sleep(5)
+                
+                # Check if download is still in progress
+                if self.progress.get_step_status(ProcessStep.MODEL_DOWNLOAD) != Status.IN_PROGRESS:
+                    logger.info("Model download monitoring stopped - download completed or failed")
+                    break
+                    
+                # Log current memory usage
+                process = psutil.Process(os.getpid())
+                memory_info = process.memory_info()
+                logger.info(f"Current memory usage during download: {memory_info.rss / 1024 / 1024:.2f} MB")
+                
+        except Exception as e:
+            logger.error(f"Error in model download monitoring: {str(e)}")
+
+    def check_training_condition(self) -> bool:
+        """Check if training conditions are met"""
+        try:
+            # Check if documents exist
+            documents = self.list_documents()
+            if not documents:
+                logger.error("No documents found, training cannot proceed")
+                return False
+                
+            # Check if model name is valid
+            if not self.model_name:
+                logger.error("Model name is not set, training cannot proceed")
+                return False
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error checking training conditions: {str(e)}")
+            return False
+            
+    def reset_progress(self):
+        """Reset training progress"""
+        try:
+            logger.info("Resetting training progress...")
+            self.progress.reset_progress()
+            logger.info("Training progress reset successfully")
+        except Exception as e:
+            logger.error(f"Error resetting training progress: {str(e)}")
+
+    def start_process(self):
+        """Start the training process"""
+        try:
+            logger.info("Starting training process...")
+            
+            # Reset stop flag
+            self.is_stopped = False
+            
+            # Reset progress
+            self.reset_progress()
+            
+            # Check training conditions
+            if not self.check_training_condition():
+                logger.error("Training conditions not met, aborting process")
+                return False
+                
+            # Start the process
+            self.progress.mark_status(Status.IN_PROGRESS)
+            
+            # Execute each step in sequence
+            steps = [
+                ("List documents", self.list_documents),
+                ("Generate document embeddings", self.generate_document_embeddings),
+                ("Process chunks", self.process_chunks),
+                ("Generate chunk embeddings", self.chunk_embedding),
+                ("Extract dimensional topics", self.extract_dimensional_topics),
+                ("Generate biography", self.generate_biography),
+                ("Download model", self.model_download),
+                ("Map entity network", self.map_your_entity_network),
+                ("Decode preference patterns", self.decode_preference_patterns),
+                ("Reinforce identity", self.reinforce_identity),
+                ("Augment content retention", self.augment_content_retention),
+            ]
+            
+            for step_name, step_func in steps:
+                if self.is_stopped:
+                    logger.info("Process stopped by user")
+                    self.progress.mark_status(Status.STOPPED)
+                    return False
+                    
+                logger.info(f"Executing step: {step_name}")
+                self.current_step = step_name
+                
+                # Execute step
+                success = step_func()
+                
+                if not success:
+                    logger.error(f"Step '{step_name}' failed, stopping process")
+                    self.progress.mark_status(Status.FAILED)
+                    return False
+                    
+            # All steps completed successfully
+            logger.info("All steps completed successfully")
+            self.progress.mark_status(Status.COMPLETED)
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error in training process: {str(e)}")
+            self.progress.mark_status(Status.FAILED)
+            return False
+            
+    def stop_process(self):
+        """Stop the training process"""
+        try:
+            logger.info("Stopping training process...")
+            self.is_stopped = True
+            logger.info("Training process stop flag set")
+            return True
+        except Exception as e:
+            logger.error(f"Error stopping training process: {str(e)}")
+=======
             # Mark step as completed
             logger.info("Content retention augmentation completed successfully")
             self.progress.mark_step_status(ProcessStep.AUGMENT_CONTENT_RETENTION, Status.COMPLETED)
@@ -1055,6 +1244,16 @@ class TrainProcessService:
             # Store the current process PID
             self.current_pid = os.getpid()  # Store the PID
             logger.info(f"Training process started with PID: {self.current_pid}")
+            
+            # Create pre-training backup
+            logger.info("Creating pre-training backup")
+            auto_backup_manager = AutoBackupManager()
+            auto_backup_manager.create_pre_training_backup(model_name=self.model_name)
+            
+            # Start periodic backup
+            logger.info("Starting periodic backup")
+            auto_backup_manager.start_periodic_backup(model_name=self.model_name)
+            
             # Get the ordered list of all steps
             ordered_steps = ProcessStep.get_ordered_steps()
 
@@ -1157,6 +1356,11 @@ class TrainProcessService:
             if self.current_step == ProcessStep.TRAIN:
                 self.progress.mark_step_status(ProcessStep.TRAIN, Status.SUSPENDED)
             
+            # Stop periodic backup when training is manually stopped
+            logger.info("Stopping periodic backup due to manual stop")
+            auto_backup_manager = AutoBackupManager()
+            auto_backup_manager.stop_periodic_backup()
+            
             # First check if we have the current process PID
             if not hasattr(self, 'current_pid') or not self.current_pid:
                 logger.info("No active process PID found")
@@ -1210,4 +1414,5 @@ class TrainProcessService:
                 
         except Exception as e:
             logger.error(f"Error stopping training process: {str(e)}", exc_info=True)
+>>>>>>> upstream/develop
             return False
