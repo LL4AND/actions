@@ -20,7 +20,7 @@ type Message = StorageMessage;
 
 type ModelType = 'chat' | 'thinking';
 
-interface PlaygroundSettings {
+export interface PlaygroundSettings {
   enableL0Retrieval: boolean;
   enableL1Retrieval: boolean;
   enableHelperModel: boolean;
@@ -29,9 +29,6 @@ interface PlaygroundSettings {
   systemPrompt: string;
   temperature: number;
 }
-
-// Constants
-const STORAGE_KEY_SETTINGS = 'playgroundSettings';
 
 // Function to generate unique ID
 const generateMessageId = () => {
@@ -47,6 +44,7 @@ export default function PlaygroundChat() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [modelType, setModelType] = useState<ModelType | undefined>(undefined);
+  const [initLoading, setInitLoading] = useState<boolean>(true);
 
   const originPrompt = useMemo(() => {
     const name = loadInfo?.name || 'user';
@@ -92,18 +90,8 @@ export default function PlaygroundChat() {
   const [settings, setSettings] = useState<PlaygroundSettings>(originSettings);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setSettings((prev) => {
-      const newSettings = { ...prev, systemPrompt: originPrompt };
-
-      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(newSettings));
-
-      return newSettings;
-    });
-  }, [originPrompt]);
-
-  useEffect(() => {
-    getTrainingParams()
+  const fetchModelType = () => {
+    return getTrainingParams()
       .then((res) => {
         if (res.data.code === 0) {
           const data = res.data.data;
@@ -117,7 +105,7 @@ export default function PlaygroundChat() {
       .catch((error) => {
         console.error(error.message);
       });
-  }, []);
+  };
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -140,13 +128,7 @@ export default function PlaygroundChat() {
     }
   };
 
-  // When messages are updated, scroll to the bottom
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, streamContent]);
-
-  // First initialization
-  useEffect(() => {
+  const firstLoadSessions = () => {
     const storedSessions = chatStorage.getSessions();
 
     setSessions(storedSessions);
@@ -156,28 +138,35 @@ export default function PlaygroundChat() {
     } else {
       setActiveSessionId(storedSessions[0].id);
       setMessages(storedSessions[0].messages);
+      setSettings(storedSessions[0].setting);
     }
-  }, []);
+  };
 
-  // Load sessions, messages, and settings from storage on mount
+  // When messages are updated, scroll to the bottom
   useEffect(() => {
-    const storedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+    scrollToBottom();
+  }, [messages, streamContent]);
 
-    if (storedSettings) {
-      try {
-        setSettings(JSON.parse(storedSettings));
-      } catch (error) {
-        console.error('Failed to parse stored settings:', error);
-      }
-    }
+  // First initialization
+  useEffect(() => {
+    fetchModelType().then(() => {
+      setInitLoading(false);
+    });
   }, []);
+
+  useEffect(() => {
+    if (!initLoading) {
+      firstLoadSessions();
+    }
+  }, [initLoading]);
 
   const handleNewChat = () => {
-    const newSession = chatStorage.createSession();
+    const newSession = chatStorage.createSession({ originPrompt: originPrompt });
 
     setSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
     setMessages([]);
+    setSettings(originSettings);
   };
 
   const handleSessionClick = (sessionId: string) => {
@@ -188,12 +177,18 @@ export default function PlaygroundChat() {
 
     if (session) {
       setMessages(session.messages);
+      setSettings(session.setting);
     }
   };
 
   const handleSettingsChange = (newSettings: PlaygroundSettings) => {
     setSettings(newSettings);
-    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(newSettings));
+
+    if (activeSessionId) {
+      chatStorage.updateSession(activeSessionId, {
+        setting: newSettings
+      });
+    }
   };
 
   const handleSendMessage = async (content: string) => {
@@ -224,7 +219,7 @@ export default function PlaygroundChat() {
 
     const systemMessage: Message = {
       id: generateMessageId(),
-      content: originPrompt,
+      content: settings.systemPrompt,
       role: 'system',
       timestamp: new Date().toLocaleTimeString([], {
         hour: '2-digit',
@@ -237,7 +232,7 @@ export default function PlaygroundChat() {
     } else {
       newMessages = newMessages.map((msg) => {
         if (msg.role === 'system') {
-          return { ...msg, content: originPrompt };
+          return { ...msg, content: settings.systemPrompt };
         }
 
         return msg;
@@ -318,6 +313,26 @@ export default function PlaygroundChat() {
       setMessages(storedSessions[0]?.messages);
     }
   };
+
+  if (initLoading) {
+    return (
+      <div className="h-full w-full flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative w-16 h-16">
+            <div className="absolute w-16 h-16 rounded-full border-4 border-gray-200" />
+            <div
+              className="absolute w-16 h-16 rounded-full border-4 border-t-blue-500 animate-spin"
+              style={{
+                animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                animationDuration: '1.5s'
+              }}
+            />
+          </div>
+          <p className="text-gray-600 font-medium">Loading Chat...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full flex">
