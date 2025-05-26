@@ -30,6 +30,7 @@ from lpm_kernel.models.l1 import L1Bio, L1Shade
 from lpm_kernel.common.repository.database_session import DatabaseSession
 from lpm_kernel.api.domains.kernel.routes import store_l1_data
 from lpm_kernel.api.domains.trainprocess.L1_exposure_manager import output_files, query_l1_version_data, read_file_content
+from lpm_kernel.services.email_service import EmailService
 import gc
 import subprocess
 from lpm_kernel.configs.logging import get_train_process_logger, TRAIN_LOG_FILE
@@ -71,6 +72,9 @@ class TrainProcessService:
                 "config_path": None
             }
             self.l2_data_prepared = False
+            
+            # Initialize email service
+            self.email_service = EmailService()
         
         # Update model name and progress instance if model name changes
         if current_model_name != self.model_name:
@@ -280,13 +284,37 @@ class TrainProcessService:
                 self.progress.mark_step_status(ProcessStep.MODEL_DOWNLOAD, Status.COMPLETED)
                 return True
             else:
-                logger.error(f"Model path does not exist after download: {model_path}")
+                error_msg = f"Model path does not exist after download: {model_path}"
+                logger.error(error_msg)
                 self.progress.mark_step_status(ProcessStep.MODEL_DOWNLOAD, Status.FAILED)
+                
+                # Send email notification for model download failure
+                try:
+                    self.email_service.send_training_error_notification(
+                        model_name=self.model_name,
+                        error_message=error_msg,
+                        step_context="Model Download - Path Verification"
+                    )
+                except Exception as email_error:
+                    logger.error(f"Failed to send error notification email: {email_error}")
+                
                 return False
 
         except Exception as e:
-            logger.error(f"Download model failed: {str(e)}")
+            error_msg = f"Download model failed: {str(e)}"
+            logger.error(error_msg)
             self.progress.mark_step_status(ProcessStep.MODEL_DOWNLOAD, Status.FAILED)
+            
+            # Send email notification for model download exception
+            try:
+                self.email_service.send_training_error_notification(
+                    model_name=self.model_name,
+                    error_message=error_msg,
+                    step_context="Model Download - Exception"
+                )
+            except Exception as email_error:
+                logger.error(f"Failed to send error notification email: {email_error}")
+            
             return False
 
     def map_your_entity_network(self)->bool:
@@ -527,6 +555,40 @@ class TrainProcessService:
             # Mark step as in progress
             self.progress.mark_step_status(ProcessStep.TRAIN, Status.IN_PROGRESS)
             
+            # Send training start notification
+            notification_email = self.config.get('NOTIFICATION_EMAIL')
+            if notification_email:
+                try:
+                    # Get training parameters for notification
+                    params_manager = TrainingParamsManager()
+                    training_params = params_manager.get_latest_training_params()
+                    
+                    # Collect system information
+                    system_info = {}
+                    try:
+                        process = psutil.Process(os.getpid())
+                        memory_info = process.memory_info()
+                        system_info = {
+                            "Memory Usage": f"{memory_info.rss / 1024 / 1024:.2f} MB",
+                            "CPU Usage": f"{process.cpu_percent(interval=0.1):.1f}%",
+                            "Process ID": os.getpid(),
+                            "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                    except Exception as e:
+                        logger.warning(f"Could not collect system info for start notification: {str(e)}")
+                    
+                    # Send start notification with training parameters
+                    self.email_service.send_training_start_notification(
+                        self.model_name,
+                        notification_email,
+                        training_params,
+                        system_info=system_info
+                    )
+                    logger.info(f"Training start notification sent to {notification_email}")
+                except Exception as e:
+                    logger.warning(f"Could not send training start notification: {str(e)}")
+                    # Continue with training even if notification fails
+            
             # Get paths for the model
             paths = self._get_model_paths(self.model_name)
             
@@ -573,8 +635,17 @@ class TrainProcessService:
             training_result = self._start_training(script_path, log_path)
             
             if not training_result:
-                logger.error("Training process failed to start")
+                error_msg = "Training process failed to start"
+                logger.error(error_msg)
                 self.progress.mark_step_status(ProcessStep.TRAIN, Status.FAILED)
+                # Send email notification for training failure
+                notification_email = self.config.get('NOTIFICATION_EMAIL')
+                if notification_email:
+                    self.email_service.send_training_error_notification(
+                        self.model_name,
+                        error_msg,
+                        notification_email
+                    )
                 return False
                 
             # Wait for the monitoring thread to finish
@@ -587,6 +658,42 @@ class TrainProcessService:
                     error_msg = f"Training failed: {self.training_result.get('error', 'Unknown error')}"
                     logger.error(error_msg)
                     self.progress.mark_step_status(ProcessStep.TRAIN, Status.FAILED)
+                    # Send email notification for training failure with enhanced error context
+                    notification_email = self.config.get('NOTIFICATION_EMAIL')
+                    if notification_email:
+                        # Collect error context information
+                        error_context = {
+                            "Process Step": "TRAIN",
+                            "Model Name": self.model_name,
+                            "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "Process ID": self.current_pid if hasattr(self, 'current_pid') else "N/A",
+                            "Memory Usage": f"{psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024:.2f} MB"
+                        }
+                        
+                        # Add training parameters to error context if available
+                        try:
+                            params_manager = TrainingParamsManager()
+                            training_params = params_manager.get_latest_training_params()
+                            if training_params:
+                                error_context.update({
+                                    "Learning Rate": training_params.get("learning_rate", "N/A"),
+                                    "Epochs": training_params.get("number_of_epochs", "N/A"),
+                                    "Concurrency Threads": training_params.get("concurrency_threads", "N/A"),
+                                    "Data Synthesis Mode": training_params.get("data_synthesis_mode", "N/A"),
+                                    "Use CUDA": training_params.get("use_cuda", False)
+                                })
+                        except Exception as e:
+                            logger.warning(f"Could not add training parameters to error context: {str(e)}")
+                        
+                        # Send enhanced error notification
+                        self.email_service.send_training_error_notification(
+                            self.model_name,
+                            error_msg,
+                            notification_email,
+                            log_file_path=TRAIN_LOG_FILE if os.path.exists(TRAIN_LOG_FILE) else None,
+                            error_context=error_context,
+                            max_log_lines=100  # Include more log lines for better context
+                        )
                     return False
         
             return True
@@ -758,8 +865,97 @@ class TrainProcessService:
                     
                     current_time = time.time()
                     if current_time - last_update_time >= 1.0:
+                        # Send progress notification at key milestones (25%, 50%, 75%)
+                        notification_email = self.config.get('NOTIFICATION_EMAIL')
+                        if notification_email and hasattr(self, 'last_notified_percentage'):
+                            # Check if we've crossed a notification threshold
+                            thresholds = [25.0, 50.0, 75.0]
+                            for threshold in thresholds:
+                                if self.last_notified_percentage < threshold and percentage >= threshold:
+                                    try:
+                                        # Calculate estimated time remaining
+                                        elapsed_time = time.time() - self.training_start_time
+                                        if percentage > 0:
+                                            estimated_total_time = elapsed_time / (percentage / 100.0)
+                                            estimated_remaining = estimated_total_time - elapsed_time
+                                            time_remaining_str = f"{estimated_remaining / 60:.1f} minutes" if estimated_remaining < 3600 else f"{estimated_remaining / 3600:.1f} hours"
+                                        else:
+                                            time_remaining_str = "Unknown"
+                                        
+                                        # Collect progress statistics
+                                        progress_stats = {
+                                            "Percentage Complete": f"{percentage:.1f}%",
+                                            "Current Step": current_step,
+                                            "Total Steps": total_steps,
+                                            "Elapsed Time": f"{elapsed_time / 60:.1f} minutes" if elapsed_time < 3600 else f"{elapsed_time / 3600:.1f} hours",
+                                            "Estimated Time Remaining": time_remaining_str
+                                        }
+                                        
+                                        # Send progress notification
+                                        self.email_service.send_training_progress_notification(
+                                            self.model_name,
+                                            notification_email,
+                                            int(percentage),
+                                            progress_stats
+                                        )
+                                        logger.info(f"Training progress notification sent at {percentage:.1f}%")
+                                        self.last_notified_percentage = percentage
+                                    except Exception as e:
+                                        logger.warning(f"Could not send progress notification: {str(e)}")
+                        
                         if percentage == 100.0:
                             self.progress.mark_step_status(ProcessStep.TRAIN, Status.COMPLETED)
+                            # Send email notification for training completion with enhanced information
+                            notification_email = self.config.get('NOTIFICATION_EMAIL')
+                            if notification_email:
+                                # Calculate training duration
+                                training_duration = time.time() - last_update_time
+                                duration_str = f"{training_duration / 60:.2f} minutes" if training_duration < 3600 else f"{training_duration / 3600:.2f} hours"
+                                
+                                # Get model paths
+                                model_paths = self._get_model_paths(self.model_name)
+                                model_path_str = model_paths.get("merged_dir", "Unknown")
+                                
+                                # Collect comprehensive training statistics
+                                training_stats = {
+                                    "Total Steps": total_steps,
+                                    "Completed Steps": current_step,
+                                    "Training Duration": duration_str,
+                                    "Average Time Per Step": f"{training_duration / max(current_step, 1):.2f} seconds"
+                                }
+                                
+                                # Add system resource information
+                                try:
+                                    process = psutil.Process(os.getpid())
+                                    memory_info = process.memory_info()
+                                    training_stats.update({
+                                        "Peak Memory Usage": f"{memory_info.rss / 1024 / 1024:.2f} MB",
+                                        "CPU Usage": f"{process.cpu_percent(interval=0.1):.1f}%"
+                                    })
+                                except Exception as e:
+                                    logger.warning(f"Could not add system resource info to training stats: {str(e)}")
+                                
+                                # Add training parameters to statistics
+                                try:
+                                    params_manager = TrainingParamsManager()
+                                    training_params = params_manager.get_latest_training_params()
+                                    if training_params:
+                                        training_stats.update({
+                                            "Learning Rate": training_params.get("learning_rate", "N/A"),
+                                            "Epochs": training_params.get("number_of_epochs", "N/A"),
+                                            "Data Synthesis Mode": training_params.get("data_synthesis_mode", "N/A")
+                                        })
+                                except Exception as e:
+                                    logger.warning(f"Could not add training parameters to stats: {str(e)}")
+                                
+                                # Send enhanced completion notification
+                                self.email_service.send_training_completion_notification(
+                                    self.model_name,
+                                    notification_email,
+                                    training_stats,
+                                    model_path=model_path_str,
+                                    training_duration=duration_str
+                                )
                             return True
                         
                         self._update_progress("training_to_create_second_me", "train", int(percentage / 3), f"Current step: {current_step}/{total_steps}")
@@ -902,16 +1098,47 @@ class TrainProcessService:
             
             # Check if model exists
             if not os.path.exists(paths["base_path"]):
-                logger.error(f"Model '{self.model_name}' does not exist, please download first")
+                error_msg = f"Model '{self.model_name}' does not exist, please download first"
+                logger.error(error_msg)
                 self.progress.mark_step_status(ProcessStep.MERGE_WEIGHTS, Status.FAILED)
+                # Send email notification for missing base model
+                notification_email = self.config.get('NOTIFICATION_EMAIL')
+                if notification_email:
+                    error_context = {
+                        "Process Step": "MERGE_WEIGHTS",
+                        "Model Name": self.model_name,
+                        "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Base Model Path": paths["base_path"]
+                    }
+                    self.email_service.send_training_error_notification(
+                        self.model_name,
+                        error_msg,
+                        notification_email,
+                        error_context=error_context
+                    )
                 return False
             
             # Check if training output exists
             if not os.path.exists(paths["personal_dir"]):
-                return jsonify(APIResponse.error(
-                    message=f"Model '{model_name}' training output does not exist, please train model first",
-                    code=400
-                ))
+                error_msg = f"Model '{self.model_name}' training output does not exist, please train model first"
+                logger.error(error_msg)
+                self.progress.mark_step_status(ProcessStep.MERGE_WEIGHTS, Status.FAILED)
+                # Send email notification for missing training output
+                notification_email = self.config.get('NOTIFICATION_EMAIL')
+                if notification_email:
+                    error_context = {
+                        "Process Step": "MERGE_WEIGHTS",
+                        "Model Name": self.model_name,
+                        "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Personal Training Path": paths["personal_dir"]
+                    }
+                    self.email_service.send_training_error_notification(
+                        self.model_name,
+                        error_msg,
+                        notification_email,
+                        error_context=error_context
+                    )
+                return False
 
             # Ensure merged output directory exists
             os.makedirs(paths["merged_dir"], exist_ok=True)
@@ -936,6 +1163,23 @@ class TrainProcessService:
                 error_msg = f"Merge weights failed: {result.get('error', 'Unknown error')}"
                 logger.error(error_msg)
                 self.progress.mark_step_status(ProcessStep.MERGE_WEIGHTS, Status.FAILED)
+                # Send email notification for script execution failure
+                notification_email = self.config.get('NOTIFICATION_EMAIL')
+                if notification_email:
+                    error_context = {
+                        "Process Step": "MERGE_WEIGHTS",
+                        "Model Name": self.model_name,
+                        "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Script Path": script_path,
+                        "Return Code": result.get('returncode', 'N/A')
+                    }
+                    self.email_service.send_training_error_notification(
+                        self.model_name,
+                        error_msg,
+                        notification_email,
+                        log_file_path=log_path if os.path.exists(log_path) else None,
+                        error_context=error_context
+                    )
                 return False
                 
             # Check if merged model files exist
@@ -944,6 +1188,23 @@ class TrainProcessService:
                 error_msg = f"Merged model files not found in {paths['merged_dir']}"
                 logger.error(error_msg)
                 self.progress.mark_step_status(ProcessStep.MERGE_WEIGHTS, Status.FAILED)
+                # Send email notification for missing merged files
+                notification_email = self.config.get('NOTIFICATION_EMAIL')
+                if notification_email:
+                    error_context = {
+                        "Process Step": "MERGE_WEIGHTS",
+                        "Model Name": self.model_name,
+                        "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Expected Config Path": config_path,
+                        "Merged Directory": paths["merged_dir"]
+                    }
+                    self.email_service.send_training_error_notification(
+                        self.model_name,
+                        error_msg,
+                        notification_email,
+                        log_file_path=log_path if os.path.exists(log_path) else None,
+                        error_context=error_context
+                    )
                 return False
             
             logger.info("Weight merge completed successfully")
@@ -968,8 +1229,24 @@ class TrainProcessService:
             merged_model_dir = paths["merged_dir"]
             logger.info(f"Merged model path: {merged_model_dir}")
             if not os.path.exists(merged_model_dir):
-                logger.error(f"Model '{self.model_name}' merged output does not exist, please merge model first")
+                error_msg = f"Model '{self.model_name}' merged output does not exist, please merge model first"
+                logger.error(error_msg)
                 self.progress.mark_step_status(ProcessStep.CONVERT_MODEL, Status.FAILED)
+                # Send email notification for missing merged model
+                notification_email = self.config.get('NOTIFICATION_EMAIL')
+                if notification_email:
+                    error_context = {
+                        "Process Step": "CONVERT_MODEL",
+                        "Model Name": self.model_name,
+                        "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Expected Merged Path": merged_model_dir
+                    }
+                    self.email_service.send_training_error_notification(
+                        self.model_name,
+                        error_msg,
+                        notification_email,
+                        error_context=error_context
+                    )
                 return False
             
             # Get GGUF output directory
@@ -1009,6 +1286,23 @@ class TrainProcessService:
                 error_msg = f"Model conversion failed: {result.get('error', 'Unknown error')}"
                 logger.error(error_msg)
                 self.progress.mark_step_status(ProcessStep.CONVERT_MODEL, Status.FAILED)
+                # Send email notification for conversion script failure
+                notification_email = self.config.get('NOTIFICATION_EMAIL')
+                if notification_email:
+                    error_context = {
+                        "Process Step": "CONVERT_MODEL",
+                        "Model Name": self.model_name,
+                        "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Script Path": script_path,
+                        "Return Code": result.get('returncode', 'N/A'),
+                        "GGUF Output Path": gguf_path
+                    }
+                    self.email_service.send_training_error_notification(
+                        self.model_name,
+                        error_msg,
+                        notification_email,
+                        error_context=error_context
+                    )
                 return False
                 
             # Check if GGUF model file exists
@@ -1016,6 +1310,17 @@ class TrainProcessService:
                 error_msg = f"GGUF model file not found at {gguf_path}"
                 logger.error(error_msg)
                 self.progress.mark_step_status(ProcessStep.CONVERT_MODEL, Status.FAILED)
+                
+                # Send email notification for missing GGUF file
+                try:
+                    self.email_service.send_training_error_notification(
+                        model_name=self.model_name,
+                        error_message=error_msg,
+                        step_context="Model Conversion - GGUF File Check"
+                    )
+                except Exception as email_error:
+                    logger.error(f"Failed to send error notification email: {email_error}")
+                
                 return False
             
             logger.info("Model conversion completed successfully")
