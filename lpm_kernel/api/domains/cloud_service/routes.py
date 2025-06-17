@@ -72,7 +72,6 @@ def get_service_status():
     status_file_path = get_service_status_file_path()
     if not os.path.exists(status_file_path):
         return None
-    
     try:
         with open(status_file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -713,8 +712,7 @@ def start_cloud_service():
     """Start cloud inference service
     
     Request: JSON object, containing:
-    - model_id: str, Cloud model deployment ID
-    - model_name: str, optional, Model name for display
+    - deployment_model: str, Cloud model deployment model
     
     Returns:
     {
@@ -722,7 +720,7 @@ def start_cloud_service():
         "message": str,
         "data": {
             "service_type": "cloud",
-            "model_id": str,
+            "deployment_model": str,
             "status": "active"
         }
     }
@@ -731,11 +729,10 @@ def start_cloud_service():
     
     try:
         data = request.get_json()
-        if not data or "model_id" not in data:
-            return jsonify(APIResponse.error(message="Missing required parameter: model_id", code=400))
+        if not data or "deployment_model" not in data:
+            return jsonify(APIResponse.error(message="Missing required parameter: deployment_model", code=400))
 
-        model_id = data["model_id"]
-        model_name = data.get("model_name", model_id)
+        deployment_model = data["deployment_model"]
 
         # Check if any service is already running
         current_status = get_service_status()
@@ -750,19 +747,28 @@ def start_cloud_service():
         try:
             # Verify deployment exists by checking deployed_model field
             deployments = cloud_service.list_deployments()
-            if not any(dep.get("deployed_model") == model_id or dep.get("name") == model_id for dep in deployments):
+            model_name = deployment_model
+
+            found = False
+            for dep in deployments:
+                if dep.get("deployed_model") == deployment_model:
+                    model_name = dep.get("name")
+                    found = True
+                    break
+                    
+            if not found:
                 return jsonify(APIResponse.error(
-                    message=f"Cloud model deployment '{model_id}' not found",
+                    message=f"Cloud model deployment '{deployment_model}' not found",
                     code=404
                 ))
         except Exception as e:
-            logger.warning(f"Could not verify cloud deployment: {str(e)}")
+            return jsonify(APIResponse.error(message=f"Failed to verify model deployment: {str(e)}"))
 
         # Create service status file for cloud service
         model_data = {
-            "model_id": model_id,
+            "model_id": deployment_model,
             "model_name": model_name,
-            "model_path": f"cloud/{model_id}",
+            "model_path": f"cloud/{deployment_model}",
             "service_endpoint": "cloud_inference"
         }
         
@@ -770,15 +776,14 @@ def start_cloud_service():
 
         # Set global status
         _cloud_service_active = True
-        _cloud_service_model_id = model_id
+        _cloud_service_model_id = deployment_model
 
-        logger.info(f"Cloud service started with model: {model_id}")
+        logger.info(f"Cloud service started with model: {deployment_model}")
         
         return jsonify(APIResponse.success(
             data={
                 "service_type": "cloud",
-                "model_id": model_id,
-                "model_name": model_name,
+                "model_id": deployment_model,
                 "status": "active"
             },
             message="Cloud inference service started successfully"

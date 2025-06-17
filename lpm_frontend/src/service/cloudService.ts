@@ -99,9 +99,13 @@ export const getCloudTrainingStatus = (
 
 export interface CloudDeployment {
   base_model: string;
-  deployed_model: string;
-  name: string;
-  status: string; // e.g., "RUNNING", "PENDING", "STOPPED"
+  deployed_model: string | null;
+  hyper_parameters: Record<string, unknown>;
+  is_deployed: boolean;
+  job_id: string;
+  name: string | null;
+  training_type: string;
+  usage: number;
 }
 
 export interface DeploymentListResponse {
@@ -155,8 +159,7 @@ export const runCloudInference = async (
 
 // Cloud service control interfaces
 export interface CloudServiceStartRequest {
-  model_id: string;
-  model_name?: string;
+  deployment_model: string;
 }
 
 export interface CloudServiceResponse {
