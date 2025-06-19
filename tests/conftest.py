@@ -13,6 +13,23 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support import expected_conditions as EC
 
+_TEST_SESSION_STATE = {
+    "memories_uploaded_state": False,
+    "uploaded_memories_idList": [],
+    "local_training_started": False,
+    "cloud_training_started": False
+}
+@pytest.fixture(scope="session")
+def global_test_state():
+    """会话级全局状态"""
+    return _TEST_SESSION_STATE
+
+@pytest.fixture(scope="module")
+def test_session_state(global_test_state):
+    """模块级状态，但实际共享全局状态"""
+    # 返回全局状态引用
+    return global_test_state
+
 @pytest.fixture(scope="module")
 def driver():
     # 配置 Chrome 选项（无头模式、禁用沙盒等）
@@ -102,7 +119,12 @@ def create_user(driver):
     }
 @pytest.fixture(scope="module")
 def model_conf():
+    print("环境变量列表：", os.environ.keys())
     try:
+    
+        # 检查单个变量是否存在
+        if "PROVIDER_TYPE" not in os.environ:
+            raise ValueError("PROVIDER_TYPE 未在环境变量中找到")
         url = "http://localhost:3000/api/user-llm-configs"
         headers = {
    'Content-Type': 'application/json',
@@ -128,15 +150,44 @@ def model_conf():
         raise
 
 
-@pytest.fixture(scope="session")
-def test_session_state():
-     """跟踪测试状态，供训练使用"""
-     return {
-          "memories_uploaded_state": False,
-          "uploaded_memories_idList": [],
-          "local_training_started": False,
-          "cloud_training_started": False
-     }
+# @pytest.fixture(scope="session")
+# def test_session_state():
+#      """跟踪测试状态，供训练使用"""
+#      return {
+#           "memories_uploaded_state": False,
+#           "uploaded_memories_idList": [],
+#           "local_training_started": False,
+#           "cloud_training_started": False
+#      }
+
+def pytest_collection_modifyitems(session, config, items):
+    # 定义测试顺序（支持完整路径匹配，避免同名测试混淆）
+    file_order = [
+        "test_create_user",
+        "test_local_training",
+        "test_cloud_training"
+    ]
+    
+    # 创建测试路径到测试项的映射（确保唯一性）
+    item_path_map = {}
+    for item in items:
+        # 获取测试的完整路径（如：tests.test_create_user.test_create_user）
+        item_path = ".".join([item.module.__name__, item.name])
+        item_path_map[item_path] = item
+    
+    # 按预期顺序重新排列测试
+    ordered_items = []
+    for expected_path in file_order:
+        # 匹配包含预期路径的测试（支持部分匹配，如 "tests.test_create_user" 匹配所有该文件中的测试）
+        matched = [item for path, item in item_path_map.items() if expected_path in path]
+        ordered_items.extend(matched)
+    
+    # 添加未匹配的测试（可选）
+    remaining = [item for item in items if item not in ordered_items]
+    ordered_items.extend(remaining)
+    
+    # 更新测试顺序
+    items[:] = ordered_items
 
 @pytest.fixture(scope="module")
 def test_config():
