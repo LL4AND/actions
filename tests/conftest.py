@@ -3,6 +3,8 @@ import json
 import tempfile
 import requests
 import logging
+import os
+from dotenv import load_dotenv
 from datetime import datetime
 from selenium.webdriver.common.by import By
 from selenium import webdriver
@@ -108,14 +110,14 @@ def model_conf():
    'Connection': 'keep-alive'
 }
         payload = json.dumps({
-    "provider_type": "litellm",
-    "chat_api_key": "sk-FLqSZZcPypob4dUcJGGxiw",
-    "chat_endpoint": "http://litellm.mindverse.com:4000",
-    "chat_model_name": "openai/gpt-4o",
-    "cloud_service_api_key": "sk-184bdd2d429948b687c0be03e272f212",
-    "embedding_api_key": "sk-FLqSZZcPypob4dUcJGGxiw",
-    "embedding_endpoint": "http://litellm.mindverse.com:4000",
-    "embedding_model_name": "openai/text-embedding-ada-002"
+        "provider_type": os.environ["PROVIDER_TYPE"],
+        "chat_api_key": os.environ["CHAT_API_KEY"],
+        "chat_endpoint": os.environ["CHAT_ENDPOINT"],
+        "chat_model_name": os.environ["CHAT_MODEL_NAME"],
+        "cloud_service_api_key": os.environ["CLOUD_SERVICE_API_KEY"],
+        "embedding_api_key": os.environ["EMBEDDING_API_KEY"],
+        "embedding_endpoint": os.environ["EMBEDDING_ENDPOINT"],
+        "embedding_model_name": os.environ["EMBEDDING_MODEL_NAME"],
 })
         response = requests.request("PUT", url, headers=headers, data=payload)
         
