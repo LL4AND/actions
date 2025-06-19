@@ -10,13 +10,16 @@ from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime
 import logging
 # 定义测试参数，包括单个文件和文件夹路径
-@pytest.mark.order(3)
 class TestCloudTraining:
 
     
     @pytest.mark.dependency(name='cloud_start')
     
     def test_train_cloud_start(self,model_conf,test_session_state, get_model_list, start_training):
+        print("记忆上传状态:", test_session_state["memories_uploaded_state"])
+        print(f"create_user fixture ID: {id(test_session_state)}")
+        assert test_session_state["memories_uploaded_state"] is True
+
         # 检查记忆是否上传
         if not test_session_state['memories_uploaded_state']:
             pytest.skip("记忆未上传，跳过训练测试")
@@ -38,10 +41,10 @@ class TestCloudTraining:
             "base_model": model_id,
             "data_synthesis_mode": "low",
             "hyper_parameters": {
-                "n_epochs": 3,
+                "n_epochs": 1,
                 "learning_rate": 0.0001,
-                "language": "en"
             },
+            "language": "chinese",
             "training_type": "efficient_sft"
         }
         start_training_res = start_training(start_training_url,payload)
@@ -81,8 +84,7 @@ class TestCloudTraining:
             if overall_progress >= 100.0:
                 logging.info("训练已完成")
                 assert status == "completed",f'训练进度100%，训练异常，当前进度{status}'
-                return process_res
-                    
+                break
                     
                     
             time.sleep(test_config["retry_interval"])
