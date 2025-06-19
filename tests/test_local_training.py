@@ -3,11 +3,11 @@ import pytest
 import logging
 import time
 from datetime import datetime
-@pytest.mark.order(2)
 class TestLocalTraining:
     @pytest.mark.dependency(name='local_start')
 
     def test_train_local_start(self, model_conf, test_session_state, get_model_list, start_training):
+        print(f"create_user fixture ID: {id(test_session_state)}")
         # 检查记忆是否上传
         if not test_session_state['memories_uploaded_state']:
             pytest.skip("记忆未上传，跳过训练测试")
@@ -29,11 +29,12 @@ class TestLocalTraining:
         payload = {
             "cloud_model_name": datetime.now().strftime("%Y%m%d_%H%M%S"),
             "data_synthesis_mode": "low",
+            "concurrency_threads": 2,
             "is_cot": False,
-            "language": "en",
+            "language": "chinese",
             "learning_rate": 0.0001,
-            "local_model_name": model_id,
-            "model_name": model_id,
+            "local_model_name": "Qwen3-0.6B",
+            "model_name": "Qwen3-0.6B",
             "number_of_epochs": 3,
             "use_cuda": False
 
@@ -60,13 +61,13 @@ class TestLocalTraining:
             
             
             # 获取训练进度
-            url = f"http://localhost:3000/api/trainprocess/progress/{model_id}"
+            url = f"http://localhost:3000/api/trainprocess/progress/Qwen3-0.6B"
             process_res = get_training_progress(url)
                     
 
             if process_res['code'] != 0:
                             
-                pytest.fail(f"获取训练进度失败：{process_res.get("data","获取不到训练进度的process的data")}")
+                pytest.fail(f"获取训练进度失败：{process_res.get('data','获取不到训练进度的process的data')}")
                     
             process_data = process_res.get("data",{})
             overall_progress = process_data.get("overall_progress",0)
@@ -77,8 +78,7 @@ class TestLocalTraining:
             if overall_progress >= 100:
                 logging.info("训练已完成")
                 assert status == "completed",f'训练进度100%，训练异常，当前进度{status}'
-                return process_res
-                    
+                break
                     
                     
             time.sleep(test_config["retry_interval"])
