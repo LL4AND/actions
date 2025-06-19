@@ -8,7 +8,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 # 定义测试参数，包括单个文件和文件夹路径
-@pytest.mark.order(1)
 class TestCreateUser:
     memories_list = None
     def test_input_value(self, create_user):  # 直接通过参数获取fixture中的driver
@@ -214,6 +213,7 @@ EC.visibility_of_element_located((By.CSS_SELECTOR, ".ant-modal-body .markdown-bo
             # 更新会话状态：记忆已上传
             test_session_state["memories_uploaded_state"] = True
             test_session_state["uploaded_memories_idList"] = [mem["id"] for mem in TestCreateUser.memories_list]
+            print(f"create_user fixture ID: {id(test_session_state)}")
 
 
         except AssertionError as e:
