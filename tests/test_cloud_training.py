@@ -66,6 +66,7 @@ class TestCloudTraining:
             if time.time() - start_time > test_config["timeout_seconds"]:
                 logging.info("训练超时，开始尝试停止训练")
                 stop_url = "http://localhost:3000/api/cloud_service/train/stop"
+                reset_url = "http://localhost:3000/api/cloud_service/train/progress/reset"
                 max_retries = 10
                 retry_count = 0
                 stop_success = False
