@@ -54,17 +54,45 @@ class TestCloudTraining:
             
 
     @pytest.mark.dependency(depends=["cloud_start"])
-    def test_train_cloud_nonStop(self, model_conf, test_session_state, get_training_progress, test_config):
-        """"测试1.不中断训练"""
+    def test_train_cloud_process(self, model_conf, test_session_state, get_training_progress, test_config):
+        # 1.获取训练进度
         if not test_session_state.get("cloud_training_started"):
             pytest.skip("未开启训练")
         start_time = time.time()
             
         url = "http://localhost:3000/api/cloud_service/train/progress"
-        # 2. 轮询训练进度，直到完成或出错或超出时间
+        # 2.超出时间限制，发起stop请求
         while True:
             if time.time() - start_time > test_config["timeout_seconds"]:
-                pytest.fail("训练超时")
+                logging.info("训练超时，开始尝试停止训练")
+                stop_url = "http://localhost:3000/api/trainprocess/stop"
+                max_retries = 10
+                retry_count = 0
+                stop_success = False
+            
+                while retry_count < max_retries:
+                    try:
+                    
+                        response = requests.post(stop_url)
+                        if response.status_code == 200:
+                            stop_success == True
+                            logging.info("成功发送停止训练请求")
+                            assert stop_success = True,"发起停止请求失败"
+                            break
+                        else:
+                            logging.warning(f"停止训练请求失败，状态码: {response.status_code}")
+                    except Exception as e:
+                        logging.warning(f"停止训练请求异常: {str(e)}")
+                
+                    retry_count += 1
+                    logging.info(f"准备第{retry_count}次重试停止训练请求")
+                    time.sleep(1)  # 重试间隔1秒
+            
+                if not stop_success:
+                    pytest.fail(f"尝试{max_retries}次停止训练请求均失败")
+                else:
+                    pytest.fail("训练超时，已成功发送停止训练请求")
+                
                 
             # 获取训练进度
             
