@@ -182,7 +182,7 @@ def pytest_collection_modifyitems(session, config, items):
         matched = [item for path, item in item_path_map.items() if expected_path in path]
         ordered_items.extend(matched)
     
-    添加未匹配的测试（可选）
+    # 添加未匹配的测试
     remaining = [item for item in items if item not in ordered_items]
     ordered_items.extend(remaining)
     
