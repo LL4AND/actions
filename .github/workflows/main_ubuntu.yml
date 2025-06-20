@@ -1,0 +1,118 @@
+name: Deployment_main_ubuntu
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ ]
+
+env:
+  PROJECT_NAME: Second-Me
+  DEPLOY_ENV: pro
+  SERVICE_PORT: 3000
+  DISPLAY: :99
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    env:
+      # 从 GitHub Secrets 注入环境变量
+      PROVIDER_TYPE: ${{ secrets.PROVIDER_TYPE }}
+      CHAT_API_KEY: ${{ secrets.CHAT_API_KEY }}
+      CHAT_ENDPOINT: ${{ secrets.CHAT_ENDPOINT }}
+      CHAT_MODEL_NAME: ${{ secrets.CHAT_MODEL_NAME }}
+      CLOUD_SERVICE_API_KEY: ${{ secrets.CLOUD_SERVICE_API_KEY }}
+      EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY }}
+      EMBEDDING_ENDPOINT: ${{ secrets.EMBEDDING_ENDPOINT }}
+      EMBEDDING_MODEL_NAME: ${{ secrets.EMBEDDING_MODEL_NAME }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]  
+        python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            use_docker: true
+          
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Determine USE_DOCKER
+        id: docker_check
+        shell: bash
+        run: |
+          echo "USE_DOCKER=${{matrix.use_docker}}" >> $GITHUB_ENV
+      
+      - name: Install Ubuntu dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libuv1-dev \
+            build-essential \
+            libssl-dev \
+            xvfb \
+            libgtk-3-0 \
+            libgbm-dev \
+            libnss3 \
+            libasound2
+          
+
+      - name: Start service  
+        shell: bash
+        run: |
+          pip install selenium webdriver-manager pytest pytest-selenium pytest-dependency pytest-order
+          make docker-up
+          sleep 30
+
+      - name: Check service status
+        shell: bash
+        run: |
+          ss -ltnp | grep ":$SERVICE_PORT" || true
+          curl -v http://localhost:${{ env.SERVICE_PORT }} || true
+
+      - name: Install Chrome browser
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Setup Xvfb
+        uses: GabrielBB/xvfb-action@v1
+        with:
+          run: echo "Xvfb started"  
+
+      - name: Smoke test 
+        id: selenium_test
+        run: |
+          export DISPLAY=:99
+          
+          # 更健壮的服务等待机制
+          echo "Waiting for service to be fully ready..."
+          for i in {1..30}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${{ env.SERVICE_PORT }})
+            echo "Attempt $i: HTTP $HTTP_CODE"
+      
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Service is ready!"
+              break
+            fi
+      
+            # 如果是500错误，立即显示日志
+            if [ "$HTTP_CODE" = "500" ]; then
+              echo "Service returned 500 error"
+              if [ "$USE_DOCKER" = "true" ]; then
+                docker logs $(docker ps -q) || true
+              fi
+            fi
+      
+            sleep 5
+          done
+
+          # 详细检查服务状态
+          echo "Final service check:"
+          curl -v http://localhost:${{ env.SERVICE_PORT }}
+          
+          pytest tests/ --log-cli-level=DEBUG
