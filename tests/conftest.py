@@ -178,11 +178,11 @@ def pytest_collection_modifyitems(session, config, items):
     # 按预期顺序重新排列测试
     ordered_items = []
     for expected_path in file_order:
-        # 匹配包含预期路径的测试（支持部分匹配，如 "tests.test_create_user" 匹配所有该文件中的测试）
+        
         matched = [item for path, item in item_path_map.items() if expected_path in path]
         ordered_items.extend(matched)
     
-    # # 添加未匹配的测试（可选）
+    # 添加未匹配的测试（可选）
     # remaining = [item for item in items if item not in ordered_items]
     # ordered_items.extend(remaining)
     
