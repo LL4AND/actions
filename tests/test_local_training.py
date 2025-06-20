@@ -72,7 +72,7 @@ class TestLocalTraining:
                         if response.status_code == 200:
                             stop_success = True
                             logging.info("成功发送停止训练请求")
-                            assert stop_success == True, "发起停止请求失败"
+                            assert stop_success, "发起停止请求失败"
                             break
                         else:
                             logging.warning(f"停止训练请求失败，状态码: {response.status_code}")
