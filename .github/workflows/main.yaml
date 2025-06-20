@@ -1,4 +1,4 @@
-name: Deployment_main
+name: Deployment_main_macOS
 
 on:
   workflow_dispatch:
