@@ -65,6 +65,7 @@ jobs:
         shell: bash
         run: |
           pip install selenium webdriver-manager pytest pytest-selenium pytest-dependency pytest-order
+          rm -rf data
           make docker-up
           sleep 30
 
