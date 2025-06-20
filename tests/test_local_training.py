@@ -63,9 +63,11 @@ class TestLocalTraining:
             if time.time() - start_time > test_config["timeout_seconds"]:
                 logging.info("训练超时，开始尝试停止训练")
                 stop_url = "http://localhost:3000/api/trainprocess/stop"
+                reset_url = "http://localhost:3000/api/trainprocess/progress/reset"
                 max_retries = 10
                 retry_count = 0
                 stop_success = False
+                reset_success = False
             
                 while retry_count < max_retries:
                     try:
@@ -73,7 +75,17 @@ class TestLocalTraining:
                         if response.status_code == 200:
                             stop_success = True
                             logging.info("成功发送停止训练请求")
-                            assert stop_success, "发起停止请求失败"
+                            
+                            reset_res = requests.post(reset_url)
+                            if reset_res.status_code == 200:
+                                reset_success = True
+                                logging.info("成功发送重置请求")
+                                
+                             # 验证停止和重置是否成功
+                            if not stop_success:
+                                logging.error("停止训练请求失败")
+                            if not reset_success:
+                                logging.error("重置训练进度请求失败")
                             break
                         else:
                             logging.warning(f"停止训练请求失败，状态码: {response.status_code}")
