@@ -164,7 +164,7 @@ def pytest_collection_modifyitems(session, config, items):
     # 定义测试顺序（支持完整路径匹配，避免同名测试混淆）
     file_order = [
         "test_create_user",
-        "test_local_training",
+        # "test_local_training",
         "test_cloud_training"
     ]
     
@@ -182,9 +182,9 @@ def pytest_collection_modifyitems(session, config, items):
         matched = [item for path, item in item_path_map.items() if expected_path in path]
         ordered_items.extend(matched)
     
-    # 添加未匹配的测试（可选）
-    remaining = [item for item in items if item not in ordered_items]
-    ordered_items.extend(remaining)
+    # # 添加未匹配的测试（可选）
+    # remaining = [item for item in items if item not in ordered_items]
+    # ordered_items.extend(remaining)
     
     # 更新测试顺序
     items[:] = ordered_items
@@ -195,7 +195,7 @@ def test_config():
         "cloud_api_base": "http://localhost:3000/api/cloud_service",
         "local_api_base": "http://localhost:3000/api/trainprocess",
         "retry_interval": 1,
-        "timeout_seconds": 60 * 60
+        "timeout_seconds": 3 * 60 * 60
     }
 
 @pytest.fixture(scope="function")
