@@ -65,7 +65,7 @@ jobs:
           python -m venv .venv
           source .venv/bin/activate
           # 安装Python依赖
-          pip install selenium webdriver-manager pytest pytest-selenium pytest-dependency pytest-order
+          pip install selenium webdriver-manager pytest pytest-selenium pytest-dependency pytest-xdist
           make setup
           make restart
           sleep 30
@@ -123,4 +123,4 @@ jobs:
           curl -v http://localhost:${{ env.SERVICE_PORT }}
           # 激活虚拟环境并运行测试
           source .venv/bin/activate
-          pytest tests/ --log-cli-level=DEBUG  # 启用详细日志
+          pytest -n auto tests/ --log-cli-level=DEBUG  # 启用详细日志
