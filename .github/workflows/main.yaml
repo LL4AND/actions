@@ -124,4 +124,4 @@ jobs:
           curl -v http://localhost:${{ env.SERVICE_PORT }}
           # 激活虚拟环境并运行测试
           source .venv/bin/activate
-          pytest -n auto tests/ --log-cli-level=DEBUG  # 启用详细日志
+          pytest tests/ --log-cli-level=DEBUG  # 启用详细日志
