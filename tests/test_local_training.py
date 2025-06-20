@@ -2,6 +2,7 @@
 import pytest
 import logging
 import time
+import requests 
 from datetime import datetime
 class TestLocalTraining:
     @pytest.mark.dependency(name='local_start')
