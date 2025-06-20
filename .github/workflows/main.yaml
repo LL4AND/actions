@@ -67,6 +67,7 @@ jobs:
           # 安装Python依赖
           pip install selenium webdriver-manager pytest pytest-selenium pytest-dependency pytest-xdist
           make setup
+          rm -rf data
           make restart
           sleep 30
 
