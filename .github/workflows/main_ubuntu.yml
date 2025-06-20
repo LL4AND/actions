@@ -58,7 +58,7 @@ jobs:
             libgtk-3-0 \
             libgbm-dev \
             libnss3 \
-            libasound2
+            
           
 
       - name: Start service  
