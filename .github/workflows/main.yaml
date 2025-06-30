@@ -1,7 +1,7 @@
 name: Deployment_main_macOS
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: 
   push:
     branches: [ ]
   
