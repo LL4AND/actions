@@ -103,7 +103,7 @@ class TestCloudTraining:
                     pytest.fail(f"尝试{max_retries}次停止训练请求均失败")
                 else:
                     logging.info("训练超时，已成功发送停止训练请求")
-                
+                    break
                 
             # 获取训练进度
             
