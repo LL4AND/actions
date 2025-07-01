@@ -71,12 +71,12 @@ class TestLocalTraining:
             
                 while retry_count < max_retries:
                     try:
-                        response = requests.post(stop_url)
+                        response = requests.post(stop_url, timeout=10)
                         if response.status_code == 200:
                             stop_success = True
                             logging.info("成功发送停止训练请求")
                             
-                            reset_res = requests.post(reset_url)
+                            reset_res = requests.post(reset_url, timeout=10)
                             if reset_res.status_code == 200:
                                 reset_success = True
                                 logging.info("成功发送重置请求")
@@ -100,6 +100,7 @@ class TestLocalTraining:
                     pytest.fail(f"尝试{max_retries}次停止训练请求均失败")
                 else:
                     logging.info("训练超时，已成功发送停止训练请求")
+                    break    
             
             
             
