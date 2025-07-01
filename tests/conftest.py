@@ -195,7 +195,7 @@ def test_config():
         "cloud_api_base": "http://localhost:3000/api/cloud_service",
         "local_api_base": "http://localhost:3000/api/trainprocess",
         "retry_interval": 1,
-        "timeout_seconds": 30 * 60
+        "timeout_seconds": 6 * 60
     }
 
 @pytest.fixture(scope="function")
