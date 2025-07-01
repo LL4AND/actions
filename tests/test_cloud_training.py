@@ -16,6 +16,7 @@ class TestCloudTraining:
     @pytest.mark.dependency(name='cloud_start')
     
     def test_train_cloud_start(self,model_conf,test_session_state, get_model_list, start_training):
+        
         print("记忆上传状态:", test_session_state["memories_uploaded_state"])
         print(f"create_user fixture ID: {id(test_session_state)}")
         assert test_session_state["memories_uploaded_state"] is True
@@ -55,6 +56,8 @@ class TestCloudTraining:
 
     @pytest.mark.dependency(depends=["cloud_start"])
     def test_train_cloud_process(self, model_conf, test_session_state, get_training_progress, test_config):
+        
+
         # 1.获取训练进度
         if not test_session_state.get("cloud_training_started"):
             pytest.skip("未开启训练")
@@ -67,19 +70,19 @@ class TestCloudTraining:
                 logging.info("训练超时，开始尝试停止训练")
                 stop_url = "http://localhost:3000/api/cloud_service/train/stop"
                 reset_url = "http://localhost:3000/api/cloud_service/train/progress/reset"
-                max_retries = 10
+                max_retries = 3
                 retry_count = 0
                 stop_success = False
                 reset_success = False
             
                 while retry_count < max_retries:
                     try:
-                        response = requests.post(stop_url)
+                        response = requests.post(stop_url, timeout=10)
                         if response.status_code == 200:
                             stop_success = True
                             logging.info("成功发送停止训练请求")
                             
-                            reset_res = requests.post(reset_url)
+                            reset_res = requests.post(reset_url, timeout=10)
                             if reset_res.status_code == 200:
                                 reset_success = True
                                 logging.info("成功发送重置请求")
